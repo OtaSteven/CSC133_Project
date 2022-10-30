@@ -2,14 +2,24 @@ import javafx.animation.Animation;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.beans.binding.Bindings;
+import javafx.geometry.Insets;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.control.Label;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
+import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import javafx.scene.transform.Rotate;
+import javafx.scene.transform.Scale;
+import javafx.scene.transform.Translate;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import java.util.Random;
@@ -20,16 +30,54 @@ interface Updatable
 }
 class Game extends Pane
 {
+  Pond pond;
+  HeliPad heliPad;
+  Helicopter helicopter;
   public Game()
   {
+    pond = new Pond();
+    heliPad = new HeliPad();
+    helicopter = new Helicopter();
     setScaleY(-1);
-    getChildren().add(new Pond());
-    getChildren().add(new HeliPad());
-    getChildren().add(new Helicopter());
+    setBackground(new Background(new BackgroundFill(Color.BLACK,
+        new CornerRadii(0), Insets.EMPTY)));
+    getChildren().add(pond);
+    getChildren().add(heliPad);
+    getChildren().add(helicopter);
   }
 }
 abstract class GameObject extends Group implements Updatable
 {
+  protected Translate myTranslate;
+  protected Rotate myRotate;
+  protected Scale myScale;
+  public GameObject()
+  {
+    myTranslate = new Translate();
+    myRotate = new Rotate();
+    myScale = new Scale();
+    this.getTransforms().addAll(myTranslate, myRotate, myScale);
+  }
+  public void translate(double tx, double ty)
+  {
+    myTranslate.setX(tx);
+    myTranslate.setY(ty);
+  }
+  public void rotate(double degree)
+  {
+    myRotate.setAngle(degree);
+    myRotate.setPivotX(0);
+    myRotate.setPivotY(0);
+  }
+  public void scale(double sx, double sy)
+  {
+    myScale.setX(sx);
+    myScale.setY(sy);
+  }
+  public double getMyRotate()
+  {
+    return myRotate.getAngle();
+  }
   public void update()
   {
     for (Node n : getChildren())
@@ -43,29 +91,55 @@ abstract class GameObject extends Group implements Updatable
     getChildren().add(node);
   }
 }
+class GameText extends GameObject
+{
+  Text text;
+  public GameText()
+  {
+    this("");
+  }
+  public GameText(String textString)
+  {
+    text = new Text(textString);
+    text.setScaleY(-1);
+    text.setFill(Color.WHITE);
+    text.setFont(Font.font(18));
+    add(text);
+  }
+  public void setText(String textString)
+  {
+    text.setText(textString);
+  }
+}
 class Pond extends GameObject
 {
   private Circle pond;
   private Random rand;
-
+  private int pondX, pondY;
   public Pond()
   {
     rand = new Random();
     pond = new Circle();
+    pondX = rand.nextInt((int)(GameApp.WIDTH-50));
+    pondY = rand.nextInt((int)(GameApp.HEIGHT/2)) + (int)GameApp.HEIGHT/2;
     pond.setFill(Color.BLUE);
     pond.setRadius(25);
-    pond.setCenterY(150);
-    pond.setCenterX(150);
-    update();
+    pond.setCenterX(pondX);
+    pond.setCenterY(pondY);
     add(pond);
-  }
 
+    GameText pondText = new GameText(String.valueOf(
+        rand.nextInt(100)+1) + '%');
+    pondText.setTranslateX(pond.getCenterX()-15);
+    pondText.setTranslateY(pond.getCenterY()+10);
+    add(pondText);
+  }
   @Override
   public void update() {
     AnimationTimer loop = new AnimationTimer() {
       @Override
       public void handle(long now) {
-        pond.setTranslateX(pond.getTranslateX()+1);
+
       }
     };
     loop.start();
@@ -155,7 +229,6 @@ public class GameApp extends Application {
   public void start(Stage primaryStage) {
     Game game = new Game();
     Scene scene = new Scene(game, WIDTH, HEIGHT);
-    scene.setFill(Color.BLACK);
     primaryStage.setScene(scene);
     primaryStage.setTitle("RainMaker");
     primaryStage.setResizable(false);
