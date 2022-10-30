@@ -2,11 +2,14 @@ import javafx.animation.Animation;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.beans.binding.Bindings;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.CornerRadii;
@@ -223,17 +226,32 @@ public class GameApp extends Application {
   final static double WIDTH = 600;
   final static double HEIGHT = Screen.getPrimary().getBounds().
       getHeight()-100;
-
-
+  Game game;
   @Override
   public void start(Stage primaryStage) {
-    Game game = new Game();
+    game = new Game();
     Scene scene = new Scene(game, WIDTH, HEIGHT);
     primaryStage.setScene(scene);
     primaryStage.setTitle("RainMaker");
     primaryStage.setResizable(false);
 
+    scene.setOnKeyPressed(new EventHandler<KeyEvent>() {
+      @Override
+      public void handle(KeyEvent event) {
+        if (event.getCode() == KeyCode.R)
+          reset();
+      }
+    });
+
     primaryStage.show();
+  }
+  public void reset()
+  {
+    game.getChildren().clear();
+    game.getChildren().add(new Pond());
+    //game.getChildren().add(new Cloud());
+    game.getChildren().add(new HeliPad());
+    game.getChildren().add(new Helicopter());
   }
   public static void main(String[] args) {
         launch(args);
