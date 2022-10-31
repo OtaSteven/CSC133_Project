@@ -1,23 +1,18 @@
-import javafx.animation.Animation;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
-import javafx.beans.binding.Bindings;
-import javafx.event.EventHandler;
+import javafx.geometry.BoundingBox;
 import javafx.geometry.Insets;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.BackgroundFill;
-import javafx.scene.layout.CornerRadii;
-import javafx.scene.layout.Pane;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.StrokeType;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.scene.transform.Rotate;
@@ -47,6 +42,36 @@ class Game extends Pane
     getChildren().add(pondCloud);
     getChildren().add(heliPad);
     getChildren().add(helicopter);
+  }
+  public void heliLeft()
+  {
+    helicopter.rotateLeft();
+  }
+  public void heliRight()
+  {
+    helicopter.rotateRight();
+  }
+  public void heliAccelerate()
+  {
+    helicopter.increaseSpeed();
+  }
+  public void heliDecelerate()
+  {
+    helicopter.decreaseSpeed();
+  }
+  public void turnOnBoundary()
+  {
+    pondCloud.turnOnPondCloudBoundary();
+  }
+  public void run()
+  {
+    AnimationTimer loop = new AnimationTimer() {
+      @Override
+      public void handle(long now) {
+        helicopter.update();
+      }
+    };
+    loop.start();
   }
 }
 abstract class GameObject extends Group implements Updatable
@@ -123,15 +148,23 @@ class Pond extends GameObject
   private Circle pond;
   private Random rand;
   private GameText pondText;
+  private Rectangle pondBound;
   public Pond()
   {
-    super();
     rand = new Random();
     pond = new Circle();
     pond.setFill(Color.BLUE);
     pond.setRadius(25);
     translation(rand.nextInt((int)(GameApp.GAME_WIDTH+pond.getRadius())),
         rand.nextInt((int)(GameApp.GAME_HEIGHT)));
+
+    pondBound = new Rectangle(pond.getBoundsInParent().getMinX(),
+        pond.getBoundsInParent().getMinY(), pond.getBoundsInParent().getWidth(),
+        pond.getBoundsInParent().getHeight());
+    pondBound.setStroke(Color.YELLOW);
+    add(pondBound);
+    pondBound.setVisible(!pondBound.isVisible());
+
     add(pond);
 
     pondText = new GameText(String.valueOf(
@@ -140,6 +173,10 @@ class Pond extends GameObject
     pondText.setTranslateY(pond.getCenterY()+10);
 
     add(pondText);
+  }
+  public void showPondBound()
+  {
+    pondBound.setVisible(!pondBound.isVisible());
   }
   @Override
   public void update() {
@@ -155,6 +192,7 @@ class Cloud extends GameObject
   private Circle cloud;
   private Random rand;
   private GameText cloudText;
+  private Rectangle cloudBound;
 
   public Cloud()
   {
@@ -163,6 +201,14 @@ class Cloud extends GameObject
     translation(rand.nextInt((int)(GameApp.GAME_WIDTH+cloud.getRadius())),
         rand.nextInt((int)(GameApp.GAME_HEIGHT/2)) +
             (int)GameApp.GAME_HEIGHT/2);
+
+    cloudBound = new Rectangle(cloud.getBoundsInParent().getMinX(),
+        cloud.getBoundsInParent().getMinY(), cloud.getBoundsInParent().getWidth(),
+        cloud.getBoundsInParent().getHeight());
+    cloudBound.setStroke(Color.YELLOW);
+    add(cloudBound);
+    cloudBound.setVisible(!cloudBound.isVisible());
+
     add(cloud);
 
     cloudText = new GameText("0%");
@@ -172,7 +218,10 @@ class Cloud extends GameObject
 
     add(cloudText);
   }
-
+  public void showCloudBound()
+  {
+    cloudBound.setVisible(!cloudBound.isVisible());
+  }
   @Override
   public void update() {
     translation(rand.nextInt((int)(GameApp.GAME_WIDTH+cloud.getRadius())),
@@ -194,6 +243,11 @@ class PondAndCloud extends GameObject {
     update();
     add(pond);
     add(cloud);
+  }
+  public void turnOnPondCloudBoundary()
+  {
+    pond.showPondBound();
+    cloud.showCloudBound();
   }
   @Override
   public void update() {
@@ -254,29 +308,59 @@ class HeliPad extends GameObject
 
   @Override
   public void update() {
-
   }
 }
 class Helicopter extends GameObject
 {
   Circle heli;
   Line heliHead;
+  GameText fuelText;
+  int fuel;
   public Helicopter()
   {
+    fuel = 25000;
     heli = new Circle(10);
     heli.setFill(Color.YELLOW);
-    heli.setCenterX((GameApp.GAME_WIDTH/2));
-    heli.setCenterY(130);
+    translation(GameApp.GAME_WIDTH/2, 130);
+    makeHeliHead();
+    add(heli);
+    add(heliHead);
+
+    fuelText = new GameText("F:" + fuel);
+    fuelText.setTranslateX(heli.getCenterX()-30);
+    fuelText.setTranslateY(heli.getCenterY()-15);
+    fuelText.setColor(Color.YELLOW);
+
+    add(fuelText);
+  }
+  private void makeHeliHead()
+  {
     heliHead = new Line(heli.getCenterX(), heli.getCenterY(), heli.getCenterX(),
         heli.getCenterY()+25);
     heliHead.setStroke(Color.YELLOW);
-    add(heli);
-    add(heliHead);
   }
-
   @Override
   public void update() {
+    super.update();
+  }
 
+  public void rotateLeft()
+  {
+    rotation(myRotation.getAngle()+15);
+  }
+  public void rotateRight()
+  {
+    rotation(myRotation.getAngle()-15);
+  }
+  public void increaseSpeed()
+  {
+    translation(myTranslation.getX(), myTranslation.getY()+
+        myTranslation.getY()*0.1);
+  }
+  public void decreaseSpeed()
+  {
+    translation(myTranslation.getX(), myTranslation.getY()-
+        myTranslation.getY()*0.1);
   }
 }
 public class GameApp extends Application {
@@ -296,12 +380,17 @@ public class GameApp extends Application {
     scene.setOnKeyPressed(e -> {
       switch (e.getCode())
       {
-        case R: reset(); break;
+        case  LEFT: game.heliLeft(); break;
+        case RIGHT: game.heliRight(); break;
+        case    UP: game.heliAccelerate(); break;
+        case  DOWN: game.heliDecelerate(); break;
+        case     B: game.turnOnBoundary(); break;
+        case     R: reset(); break;
 
         default: ;
       }
     });
-
+    game.run();
     primaryStage.show();
   }
   public void reset()
