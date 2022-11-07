@@ -15,7 +15,6 @@ import javafx.scene.text.Text;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Scale;
 import javafx.scene.transform.Translate;
-import javafx.stage.Screen;
 import javafx.stage.Stage;
 import java.util.Random;
 
@@ -25,15 +24,15 @@ interface Updatable
 }
 class Game extends Pane
 {
-  final static double GAME_WIDTH = 600;
-  final static double GAME_HEIGHT = Screen.getPrimary().getBounds().
-      getHeight()-100;
+  final static double GAME_WIDTH = 400;
+  final static double GAME_HEIGHT = 800;
+  //Screen.getPrimary().getBounds().getHeight()-100;
   private PondAndCloud pondCloud;
   private HeliPad heliPad;
   private Helicopter helicopter;
+  private int fillCounter = 0;
   public Game()
   {
-
     pondCloud = new PondAndCloud();
     heliPad = new HeliPad();
     helicopter = new Helicopter(heliPad.myTranslation.getX() +
@@ -43,6 +42,19 @@ class Game extends Pane
     setScaleY(-1);
     setBackground(new Background(new BackgroundFill(Color.BLACK,
         new CornerRadii(0), Insets.EMPTY)));
+    getChildren().add(pondCloud);
+    getChildren().add(heliPad);
+    getChildren().add(helicopter);
+  }
+  public void reset()
+  {
+    getChildren().clear();
+    pondCloud = new PondAndCloud();
+    heliPad = new HeliPad();
+    helicopter = new Helicopter(heliPad.myTranslation.getX() +
+        heliPad.getBoundsInParent().getWidth()/2,
+        heliPad.myTranslation.getY() +
+            heliPad.getBoundsInParent().getHeight()/2);
     getChildren().add(pondCloud);
     getChildren().add(heliPad);
     getChildren().add(helicopter);
@@ -65,7 +77,15 @@ class Game extends Pane
   }
   public void fillCloud()
   {
-
+    if (!Shape.intersect(helicopter.getHeliBound(),
+        pondCloud.cloud.getCloudBound()).getBoundsInParent().isEmpty())
+    {
+      pondCloud.cloud.increaseCloud();
+    }
+  }
+  public void startHelicopter()
+  {
+    helicopter.startIgnitition();
   }
   public void turnOnBoundary()
   {
@@ -75,12 +95,14 @@ class Game extends Pane
   public void run()
   {
     AnimationTimer loop = new AnimationTimer() {
+      private int iteration = 0;
       @Override
       public void handle(long now) {
         helicopter.update();
-        if (Shape.intersect(helicopter.getHeliBound(), pondCloud.cloud.getCloudBound()).getBoundsInParent().getWidth() > 0)
-          System.out.println("THEY INTERSECTTTT");
-
+        if (iteration++ % 20 == 0) {
+          pondCloud.cloud.decreaseCloud();
+        }
+        pondCloud.cloud.update();
         //System.out.println("HELICOPTER: " + helicopter.getBoundsInParent());
         //System.out.println("cloud: " +pondCloud.cloud.getBoundsInParent());
       }
@@ -167,30 +189,32 @@ class Pond extends GameObject
   public Pond()
   {
     rand = new Random();
-    pondCapacity = 0;
+    pondCapacity = rand.nextInt(50)+1;
     pond = new Circle();
     pond.setFill(Color.BLUE);
     pond.setRadius(25);
     translation(rand.nextInt((int)(Game.GAME_WIDTH+pond.getRadius())),
         rand.nextInt((int)(Game.GAME_HEIGHT)));
 
-    pondBound = new Rectangle(pond.getBoundsInParent().getMinX(),
-        pond.getBoundsInParent().getMinY(), pond.getBoundsInParent().getWidth(),
-        pond.getBoundsInParent().getHeight());
-    pondBound.setStroke(Color.YELLOW);
-    add(pondBound);
-    pondBound.setVisible(!pondBound.isVisible());
+    makePondBound();
 
     add(pond);
 
-    pondCapacity = rand.nextInt(50)+1;
-
-    pondText = new GameText(String.valueOf(
-        pondCapacity) + "%");
+    pondText = new GameText(pondCapacity + "%");
     pondText.setTranslateX(pond.getCenterX()-15);
     pondText.setTranslateY(pond.getCenterY()+10);
 
     add(pondText);
+  }
+  private void makePondBound()
+  {
+    pondBound = new Rectangle(pond.getBoundsInParent().getMinX(),
+        pond.getBoundsInParent().getMinY(), pond.getBoundsInParent().getWidth(),
+        pond.getBoundsInParent().getHeight());
+    pondBound.setStroke(Color.YELLOW);
+    pondBound.setFill(Color.TRANSPARENT);
+    pondBound.setVisible(!pondBound.isVisible());
+    add(pondBound);
   }
   public void showPondBound()
   {
@@ -198,15 +222,19 @@ class Pond extends GameObject
   }
   public void fillingPond()
   {
-    pondText.setText(String.valueOf(pondCapacity+1));
+    pondText.setText((pondCapacity + 1) + "%");
   }
-  @Override
-  public void update() {
+  public void resetPond()
+  {
     translation(rand.nextInt((int)(Game.GAME_WIDTH+pond.getRadius())),
         rand.nextInt((int)(Game.GAME_HEIGHT)));
     pondText.setTranslateX(pond.getCenterX()-15);
     pondText.setTranslateY(pond.getCenterY()+10);
     System.out.println("POND INTERSECT");
+  }
+  @Override
+  public void update() {
+    pondText.setText(++pondCapacity + "%");
   }
 }
 class Cloud extends GameObject
@@ -216,6 +244,7 @@ class Cloud extends GameObject
   private int cloudCapacity;
   private GameText cloudText;
   private Rectangle cloudBound;
+  private int delayCloud = 200;
 
   public Cloud()
   {
@@ -226,12 +255,7 @@ class Cloud extends GameObject
         rand.nextInt((int)(Game.GAME_HEIGHT/2)) +
             (int)Game.GAME_HEIGHT/2);
 
-    cloudBound = new Rectangle(cloud.getBoundsInParent().getMinX(),
-        cloud.getBoundsInParent().getMinY(), cloud.getBoundsInParent().getWidth(),
-        cloud.getBoundsInParent().getHeight());
-    cloudBound.setStroke(Color.YELLOW);
-    add(cloudBound);
-    cloudBound.setVisible(!cloudBound.isVisible());
+    makeCloudBound();
 
     add(cloud);
 
@@ -242,6 +266,19 @@ class Cloud extends GameObject
 
     add(cloudText);
   }
+  private void makeCloudBound()
+  {
+    cloudBound = new Rectangle(cloud.getBoundsInParent().getMinX(),
+        cloud.getBoundsInParent().getMinY(),
+        cloud.getBoundsInParent().getWidth(),
+        cloud.getBoundsInParent().getHeight());
+
+    cloudBound.setStroke(Color.YELLOW);
+    cloudBound.setFill(Color.TRANSPARENT);
+    cloudBound.setVisible(!cloudBound.isVisible());
+
+    add(cloudBound);
+  }
   public void showCloudBound()
   {
     cloudBound.setVisible(!cloudBound.isVisible());
@@ -250,12 +287,8 @@ class Cloud extends GameObject
   {
     return cloudBound;
   }
-  public void fillCloud()
+  public void resetCloud()
   {
-    cloudText.setText(String.valueOf(cloudCapacity+1) + "%");
-  }
-  @Override
-  public void update() {
     translation(rand.nextInt((int)(Game.GAME_WIDTH+cloud.getRadius())),
         rand.nextInt((int)(Game.GAME_HEIGHT/2)) +
             (int)Game.GAME_HEIGHT/2);
@@ -263,9 +296,23 @@ class Cloud extends GameObject
     cloudText.setTranslateY(cloud.getCenterY()+10);
     System.out.println("CLOUD INTERSECT");
   }
+  public void increaseCloud()
+  {
+    if (cloudCapacity <= 100)
+      cloudCapacity += 1;
+  }
+  public void decreaseCloud()
+  {
+    if (cloudCapacity > 0)
+      cloudCapacity -= 1;
+  }
+  @Override
+  public void update() {
+    cloudText.setText(cloudCapacity + "%");
+    System.out.println(cloudCapacity);
+  }
 }
 class PondAndCloud extends GameObject {
-
   Pond pond;
   Cloud cloud;
   public PondAndCloud()
@@ -288,8 +335,8 @@ class PondAndCloud extends GameObject {
     if (pond.getBoundsInParent().intersects(cloud.getBoundsInParent()) ||
         cloud.getBoundsInParent().intersects(pond.getBoundsInParent()))
     {
-      pond.update();
-      cloud.update();
+      pond.resetPond();
+      cloud.resetCloud();
       this.update();
     }
     if (pond.myTranslation.getX()+pond.getBoundsInParent().getWidth() >=
@@ -300,7 +347,7 @@ class PondAndCloud extends GameObject {
         pond.myTranslation.getY()+pond.getBoundsInParent().getHeight() <= 250)
     {
       System.out.println("POND COLLIDE WALL");
-      pond.update();
+      pond.resetPond();
       this.update();
     }
     if (cloud.myTranslation.getX()+cloud.getBoundsInParent().getWidth() >=
@@ -311,7 +358,7 @@ class PondAndCloud extends GameObject {
         cloud.myTranslation.getY()+cloud.getBoundsInParent().getHeight() <= 250)
     {
       System.out.println("CLOUD COLLIDE WALL");
-      cloud.update();
+      cloud.resetCloud();
       this.update();
     }
   }
@@ -350,6 +397,7 @@ class Helicopter extends GameObject
   private int fuel;
   private Rectangle heliBound;
   private static double maxSpeed = 10, minSpeed = -2;
+  private boolean ignition = false;
   public Helicopter()
   {
     //NOTHING IS CREATED
@@ -371,7 +419,6 @@ class Helicopter extends GameObject
 
     makeHeliBound();
 
-    heliBound.setVisible(!heliBound.isVisible());
 
     add(heli);
     add(heliHead);
@@ -386,22 +433,35 @@ class Helicopter extends GameObject
   private void makeHeliBound()
   {
     heliBound = new Rectangle(fuelText.getBoundsInParent().getMinX(),
-        fuelText.getBoundsInParent().getMinY(), fuelText.getBoundsInParent().getWidth(),
+        fuelText.getBoundsInParent().getMinY(),
+        fuelText.getBoundsInParent().getWidth(),
         (heliHead.getBoundsInParent().getHeight() +
-            heli.getRadius() + fuelText.getBoundsInParent().getHeight()));
-    System.out.println(heliHead.getBoundsInParent());
+        heli.getRadius() + fuelText.getBoundsInParent().getHeight()));
+
+    //System.out.println(heliHead.getBoundsInParent());
     heliBound.setStroke(Color.YELLOW);
+    heliBound.setFill(Color.TRANSPARENT);
+    heliBound.setVisible(!heliBound.isVisible());
     add(heliBound);
   }
   @Override
   public void update() {
-    rotation(-heliRot);
-    if (heliSpeed >= maxSpeed)
-      heliSpeed = 10;
-    if (heliSpeed <= minSpeed)
-      heliSpeed = -2;
-    myTranslation.setX(myTranslation.getX() + getVx());
-    myTranslation.setY(myTranslation.getY() + getVy());
+    if (ignition) {
+      fuelText.setText("F:" + fuel);
+      rotation(-heliRot);
+      if (heliSpeed >= maxSpeed)
+        heliSpeed = 10;
+      if (heliSpeed <= minSpeed)
+        heliSpeed = -2;
+      myTranslation.setX(myTranslation.getX() + getVx());
+      myTranslation.setY(myTranslation.getY() + getVy());
+      fuel -= 1;
+    }
+    else
+    {
+      heliSpeed = 0;
+      heliRot = 0;
+    }
   }
   public double getVx()
   {
@@ -439,6 +499,25 @@ class Helicopter extends GameObject
   {
     heliSpeed -= 0.1;
   }
+  public void startIgnitition()
+  {
+    int timer = 3;
+    while (timer != 0)
+    {
+      try {
+        System.out.println("Helicopter starting in " + timer + "...");
+        Thread.sleep(1000);
+      }
+      catch (InterruptedException e)
+      {
+        System.err.format("IOException: %s%n", e);
+      }
+      timer -= 1;
+    }
+    System.out.println("Ready to fly!");
+    ignition = true;
+
+  }
   public void showHeliBound()
   {
     heliBound.setVisible(!heliBound.isVisible());
@@ -465,9 +544,10 @@ public class GameApp extends Application {
         case RIGHT: game.heliRight(); break;
         case    UP: game.heliAccelerate(); break;
         case  DOWN: game.heliDecelerate(); break;
-        case SPACE:
+        case SPACE: game.fillCloud(); break;
+        case     I: game.startHelicopter(); break;
         case     B: game.turnOnBoundary(); break;
-        case     R: reset(); break;
+        case     R: game.reset(); break;
 
         default: ;
       }
@@ -475,13 +555,7 @@ public class GameApp extends Application {
     game.run();
     primaryStage.show();
   }
-  public void reset()
-  {
-    game.getChildren().clear();
-    game.getChildren().add(new PondAndCloud());
-    game.getChildren().add(new HeliPad());
-    game.getChildren().add(new Helicopter());
-  }
+
   public static void main(String[] args) {
         launch(args);
     }
