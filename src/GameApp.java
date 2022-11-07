@@ -30,7 +30,7 @@ class Game extends Pane
   private PondAndCloud pondCloud;
   private HeliPad heliPad;
   private Helicopter helicopter;
-  private int fillCounter = 0;
+  private boolean isHeliMoving = false;
   public Game()
   {
     pondCloud = new PondAndCloud();
@@ -85,11 +85,23 @@ class Game extends Pane
   }
   public void startHelicopter()
   {
-    helicopter.startIgnitition();
+    if (!Shape.intersect(helicopter.getHeliBound(),
+        heliPad.getHeliPadBound()).getBoundsInParent().isEmpty())
+    {
+      if (isHeliMoving == false) {
+        helicopter.startIgnitition();
+        isHeliMoving = true;
+      }
+      else {
+        helicopter.stopIgnition();
+        isHeliMoving = false;
+      }
+    }
   }
   public void turnOnBoundary()
   {
     pondCloud.turnOnPondCloudBoundary();
+    heliPad.showHeliPadBound();
     helicopter.showHeliBound();
   }
   public void run()
@@ -101,8 +113,13 @@ class Game extends Pane
         helicopter.update();
         if (iteration++ % 20 == 0) {
           pondCloud.cloud.decreaseCloud();
+          if (pondCloud.cloud.getCloudCapacity() >= 30)
+          {
+            pondCloud.pond.fillingPond();
+          }
         }
         pondCloud.cloud.update();
+        pondCloud.pond.update();
         //System.out.println("HELICOPTER: " + helicopter.getBoundsInParent());
         //System.out.println("cloud: " +pondCloud.cloud.getBoundsInParent());
       }
@@ -222,7 +239,14 @@ class Pond extends GameObject
   }
   public void fillingPond()
   {
-    pondText.setText((pondCapacity + 1) + "%");
+    if (pondCapacity < 100) {
+      pondCapacity++;
+      expandPond();
+    }
+  }
+  public void expandPond()
+  {
+    pond.setRadius(pond.getRadius() + 0.1);
   }
   public void resetPond()
   {
@@ -234,7 +258,7 @@ class Pond extends GameObject
   }
   @Override
   public void update() {
-    pondText.setText(++pondCapacity + "%");
+    pondText.setText(pondCapacity + "%");
   }
 }
 class Cloud extends GameObject
@@ -244,13 +268,14 @@ class Cloud extends GameObject
   private int cloudCapacity;
   private GameText cloudText;
   private Rectangle cloudBound;
-  private int delayCloud = 200;
+  private int saturationColor = 255;
 
   public Cloud()
   {
     rand = new Random();
     cloudCapacity = 0;
-    cloud = new Circle(50, Color.WHITE);
+    cloud = new Circle(50, Color.rgb(saturationColor, saturationColor,
+        saturationColor));
     translation(rand.nextInt((int)(Game.GAME_WIDTH+cloud.getRadius())),
         rand.nextInt((int)(Game.GAME_HEIGHT/2)) +
             (int)Game.GAME_HEIGHT/2);
@@ -262,7 +287,7 @@ class Cloud extends GameObject
     cloudText = new GameText("0%");
     cloudText.setTranslateX(cloud.getCenterX()-15);
     cloudText.setTranslateY(cloud.getCenterY()+10);
-    cloudText.setColor(Color.BLACK);
+    cloudText.setColor(Color.BLUE);
 
     add(cloudText);
   }
@@ -298,18 +323,32 @@ class Cloud extends GameObject
   }
   public void increaseCloud()
   {
-    if (cloudCapacity <= 100)
+    if (cloudCapacity < 100) {
       cloudCapacity += 1;
+      if (saturationColor > 0)
+        cloud.setFill(Color.rgb(--saturationColor,--saturationColor,
+            --saturationColor));
+      System.out.println(saturationColor);
+    }
   }
   public void decreaseCloud()
   {
-    if (cloudCapacity > 0)
+    if (cloudCapacity > 0) {
       cloudCapacity -= 1;
+      if (saturationColor < 255)
+        cloud.setFill(Color.rgb(++saturationColor,++saturationColor,
+            ++saturationColor));
+      System.out.println(saturationColor);
+    }
+  }
+  public int getCloudCapacity()
+  {
+    return cloudCapacity;
   }
   @Override
   public void update() {
     cloudText.setText(cloudCapacity + "%");
-    System.out.println(cloudCapacity);
+    //System.out.println(cloudCapacity);
   }
 }
 class PondAndCloud extends GameObject {
@@ -367,6 +406,7 @@ class HeliPad extends GameObject
 {
   private Rectangle heliPad;
   private Circle padCircle;
+  private Rectangle heliPadBound;
 
   public HeliPad()
   {
@@ -378,20 +418,43 @@ class HeliPad extends GameObject
     padCircle.setStroke(Color.YELLOW);
     padCircle.setCenterX(heliPad.getX()+heliPad.getWidth()/2);
     padCircle.setCenterY(heliPad.getY()+heliPad.getHeight()/2);
-
     translation((Game.GAME_WIDTH/2)-(heliPad.getWidth()/2), 100);
+
+    makeHeliPadBound();
+
+    System.out.println(heliPad.getBoundsInParent());
+    System.out.println(padCircle.getBoundsInParent());
+
     add(heliPad);
     add(padCircle);
   }
+  private void makeHeliPadBound()
+  {
+    heliPadBound = new Rectangle(heliPad.getX(), heliPad.getY(),
+        heliPad.getWidth(), heliPad.getHeight());
 
+    heliPadBound.setStroke(Color.YELLOW);
+    heliPadBound.setStrokeWidth(3);
+    heliPadBound.setFill(Color.TRANSPARENT);
+    heliPadBound.setVisible(!heliPadBound.isVisible());
+    add(heliPadBound);
+  }
+  public void showHeliPadBound()
+  {
+    heliPadBound.setVisible(!heliPadBound.isVisible());
+  }
+  public Rectangle getHeliPadBound()
+  {
+    return heliPadBound;
+  }
   @Override
   public void update() {
   }
 }
 class Helicopter extends GameObject
 {
-  Circle heli;
-  Line heliHead;
+  private Circle heli;
+  private Line heliHead;
   GameText fuelText;
   private double heliSpeed, heliRot;
   private int fuel;
@@ -501,22 +564,30 @@ class Helicopter extends GameObject
   }
   public void startIgnitition()
   {
-    int timer = 3;
-    while (timer != 0)
-    {
-      try {
-        System.out.println("Helicopter starting in " + timer + "...");
-        Thread.sleep(1000);
+    if (ignition == false) {
+      /*int timer = 3;
+      while (timer != 0) {
+        try {
+          System.out.println("Helicopter starting in " + timer + "...");
+          Thread.sleep(1000);
+        } catch (InterruptedException e) {
+          System.err.format("IOException: %s%n", e);
+        }
+        timer -= 1;
       }
-      catch (InterruptedException e)
-      {
-        System.err.format("IOException: %s%n", e);
-      }
-      timer -= 1;
+      System.out.println("Helicopter starting in " + timer + "...");*/
+      System.out.println("Ready to fly!");
+      ignition = true;
     }
-    System.out.println("Ready to fly!");
-    ignition = true;
-
+  }
+  public void stopIgnition()
+  {
+    if (ignition == true && (Math.floor(heliSpeed) <= 0.1 &&
+        Math.floor(heliSpeed) >= -0.1))
+    {
+      ignition = false;
+      heliSpeed = 0;
+    }
   }
   public void showHeliBound()
   {
