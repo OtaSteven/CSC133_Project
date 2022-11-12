@@ -1,13 +1,14 @@
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.geometry.BoundingBox;
 import javafx.geometry.Insets;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -20,6 +21,7 @@ import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Scale;
 import javafx.scene.transform.Translate;
 import javafx.stage.Stage;
+
 import java.util.Random;
 
 interface Updatable
@@ -32,6 +34,7 @@ class Game extends Pane
   final static double GAME_HEIGHT = 800;
   final static double HELI_SPAWN_AREA = 250;
   //Screen.getPrimary().getBounds().getHeight()-100;
+  private BackgroundImg bgImg;
   private Pond pond;
   private Cloud cloud;
   private HeliPad heliPad;
@@ -52,7 +55,7 @@ class Game extends Pane
     getChildren().clear();
     msg = new Text();
     isHeliMoving = false;
-
+    bgImg = new BackgroundImg();
     pond = new Pond();
     cloud = new Cloud();
     heliPad = new HeliPad();
@@ -62,7 +65,7 @@ class Game extends Pane
             heliPad.getBoundsInParent().getHeight()/2);
 
     repositionPondCloud();
-
+    getChildren().add(bgImg);
     getChildren().add(pond);
     getChildren().add(cloud);
     getChildren().add(heliPad);
@@ -181,7 +184,7 @@ class Game extends Pane
         winLossCondition(this);
         helicopter.update();
 
-        if (iteration++ % 20 == 0) {
+        if (iteration++ % 10 == 0) {
           cloud.decreaseCloud();
           if (cloud.isCloudCapcityOver())
           {
@@ -195,6 +198,19 @@ class Game extends Pane
       }
     };
     loop.start();
+  }
+}
+class BackgroundImg extends Pane
+{
+  private BackgroundImage bg;
+  private Image img;
+  private ImageView imgView;
+  public BackgroundImg()
+  {
+    img = new Image("desertBackground.png");
+    imgView = new ImageView(img);
+
+    getChildren().addAll(imgView);
   }
 }
 abstract class GameObject extends Group implements Updatable
@@ -427,12 +443,14 @@ class Cloud extends GameObject
   public void increaseCloud()
   {
     if (cloudCapacity < 100) {
-      cloudCapacity += 1;
-      if (saturationColor > 155)
-        cloud.setFill(Color.rgb(--saturationColor,--saturationColor,
-            --saturationColor));
-      System.out.println(saturationColor);
+      {
+        cloudCapacity++;
+        if (saturationColor > 155)
+          cloud.setFill(Color.rgb(--saturationColor, --saturationColor,
+              --saturationColor));
+      }
     }
+    System.out.println(saturationColor);
   }
   public void decreaseCloud()
   {
@@ -441,7 +459,6 @@ class Cloud extends GameObject
       if (saturationColor < 255)
         cloud.setFill(Color.rgb(++saturationColor,++saturationColor,
             ++saturationColor));
-      //System.out.println(saturationColor);
     }
   }
   public boolean isCloudCapcityOver()
@@ -499,7 +516,7 @@ class Helicopter extends GameObject
   private Circle heli;
   private Line heliHead;
   private GameText fuelText;
-  private double heliSpeed, heliRot;
+  private double heliSpeed, heliHeading;
   private double fuel;
   private static double maxHeliSpeed = 10, minHeliSpeed = -2;
   private boolean ignition = false;
@@ -556,20 +573,20 @@ class Helicopter extends GameObject
   }
   public void rotateLeft()
   {
-    heliRot -= 15;
+    heliHeading -= 15;
     if (getMyRotation() >= 345)
     {
-      heliRot = 0;
+      heliHeading = 0;
     }
     //System.out.println("ROTATION: " + getMyRotation());
     //System.out.println("HELIROT: " + heliRot);
   }
   public void rotateRight()
   {
-    heliRot += 15;
+    heliHeading += 15;
     if (getMyRotation() <= -345)
     {
-      heliRot = 0;
+      heliHeading = 0;
     }
     //System.out.println("ROTATION: " + getMyRotation());
     //System.out.println("HELIROT: " + heliRot);
@@ -616,11 +633,11 @@ class Helicopter extends GameObject
     else
       return false;
   }
-  @Override
-  public void update() {
+  private void moveHelicopter()
+  {
     if (ignition) {
       fuelText.setText("F:" + (int)fuel);
-      rotation(-heliRot);
+      rotation(-heliHeading);
       if (heliSpeed >= maxHeliSpeed)
         heliSpeed = 10;
       if (heliSpeed <= minHeliSpeed)
@@ -639,8 +656,12 @@ class Helicopter extends GameObject
     else
     {
       heliSpeed = 0;
-      heliRot = 0;
+      heliHeading = 0;
     }
+  }
+  @Override
+  public void update() {
+    moveHelicopter();
   }
 }
 public class GameApp extends Application {
