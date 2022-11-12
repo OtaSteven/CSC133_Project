@@ -1,6 +1,7 @@
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.geometry.BoundingBox;
 import javafx.geometry.Insets;
 import javafx.scene.Group;
 import javafx.scene.Node;
@@ -29,6 +30,7 @@ class Game extends Pane
 {
   final static double GAME_WIDTH = 400;
   final static double GAME_HEIGHT = 800;
+  final static double HELI_SPAWN_AREA = 250;
   //Screen.getPrimary().getBounds().getHeight()-100;
   private Pond pond;
   private Cloud cloud;
@@ -59,12 +61,14 @@ class Game extends Pane
         heliPad.myTranslation.getY() +
             heliPad.getBoundsInParent().getHeight()/2);
 
+    repositionPondCloud();
+
     getChildren().add(pond);
     getChildren().add(cloud);
     getChildren().add(heliPad);
     getChildren().add(helicopter);
   }
-  public void repositionPondCloud()
+  private void repositionPondCloud()
   {
     //System.out.println("POND: " + pond.getBoundsInParent());
     //System.out.println("CLOUD: " + cloud.getBoundsInParent());
@@ -75,23 +79,13 @@ class Game extends Pane
       cloud.resetCloud();
       this.repositionPondCloud();
     }
-    if (pond.myTranslation.getX()+pond.getBoundsInParent().getWidth() >=
-        Game.GAME_WIDTH ||
-        pond.myTranslation.getX()-pond.getBoundsInParent().getWidth()  <= 0 ||
-        pond.myTranslation.getY()+pond.getBoundsInParent().getHeight() >=
-            Game.GAME_HEIGHT ||
-        pond.myTranslation.getY()+pond.getBoundsInParent().getHeight() <= 250)
+    if (pond.isPondCollidingWall())
     {
       System.out.println("POND COLLIDE WALL");
       pond.resetPond();
       this.repositionPondCloud();
     }
-    if (cloud.myTranslation.getX()+cloud.getBoundsInParent().getWidth() >=
-        Game.GAME_WIDTH ||
-        cloud.myTranslation.getX()-cloud.getBoundsInParent().getWidth() <= 0 ||
-        cloud.myTranslation.getY()+cloud.getBoundsInParent().getHeight() >=
-            Game.GAME_HEIGHT ||
-        cloud.myTranslation.getY()+cloud.getBoundsInParent().getHeight() <= 250)
+    if (cloud.isCloudCollidingWall())
     {
       System.out.println("CLOUD COLLIDE WALL");
       cloud.resetCloud();
@@ -100,9 +94,25 @@ class Game extends Pane
   }
   private void winLossCondition(AnimationTimer GameTimer)
   {
-    if (helicopter.getFuel() <= 0) {
+    if (helicopter.isFuelEmpty()) {
       GameTimer.stop();
       msg.setText("You have lost! Play again?");
+      alert = new Alert(Alert.AlertType.CONFIRMATION, msg.getText(),
+          ButtonType.YES, ButtonType.NO);
+      alert.setOnHidden(event -> {
+        if (alert.getResult() == ButtonType.YES) {
+          init();
+        } else {
+          //SOMEHOW EXIT STAGE
+          Platform.exit();
+        }
+      });
+      alert.show();
+    }
+    else if (pond.isPondFull() && isHeliMoving == false)
+    {
+      GameTimer.stop();
+      msg.setText("You have won! Play again?");
       alert = new Alert(Alert.AlertType.CONFIRMATION, msg.getText(),
           ButtonType.YES, ButtonType.NO);
       alert.setOnHidden(event -> {
@@ -157,10 +167,10 @@ class Game extends Pane
   }
   public void turnOnBoundary()
   {
-    pond.showPondBound();
-    cloud.showCloudBound();
-    heliPad.showHeliPadBound();
-    helicopter.showHeliBound();
+    pond.showBoundingBox();
+    cloud.showBoundingBox();
+    heliPad.showBoundingBox();
+    helicopter.showBoundingBox();
   }
   public void run()
   {
@@ -168,18 +178,18 @@ class Game extends Pane
       private int iteration = 0;
       @Override
       public void handle(long now) {
-        repositionPondCloud();
+        winLossCondition(this);
         helicopter.update();
+
         if (iteration++ % 20 == 0) {
           cloud.decreaseCloud();
-          if (cloud.getCloudCapacity() >= 30)
+          if (cloud.isCloudCapcityOver())
           {
             pond.fillingPond();
           }
         }
         cloud.update();
         pond.update();
-        winLossCondition(this);
         //System.out.println("HELICOPTER: " + helicopter.getBoundsInParent());
         //System.out.println("cloud: " +pondCloud.cloud.getBoundsInParent());
       }
@@ -192,6 +202,7 @@ abstract class GameObject extends Group implements Updatable
   protected Translate myTranslation;
   protected Rotate myRotation;
   protected Scale myScale;
+  protected Rectangle bbox;
   public GameObject()
   {
     myTranslation = new Translate();
@@ -214,6 +225,19 @@ abstract class GameObject extends Group implements Updatable
   {
     myScale.setX(sx);
     myScale.setY(sy);
+  }
+  public void createBoundingBox(double minX, double minY, double height,
+                                double width)
+  {
+    bbox = new Rectangle(minX, minY, width, height);
+    bbox.setStroke(Color.YELLOW);
+    bbox.setFill(Color.TRANSPARENT);
+    bbox.setVisible(!bbox.isVisible());
+    add(bbox);
+  }
+  public void showBoundingBox()
+  {
+    bbox.setVisible(!bbox.isVisible());
   }
   public double getMyRotation()
   {
@@ -263,6 +287,7 @@ class Pond extends GameObject
   private GameText pondText;
   private Rectangle pondBound;
   private int pondCapacity;
+  private double expansionIncrement = 0.5;
   public Pond()
   {
     rand = new Random();
@@ -271,7 +296,7 @@ class Pond extends GameObject
     pond.setFill(Color.BLUE);
     pond.setRadius(25);
     translation(rand.nextInt((int)(Game.GAME_WIDTH+pond.getRadius())),
-        rand.nextInt((int)(Game.GAME_HEIGHT)));
+        rand.nextInt((int)Game.GAME_HEIGHT));
 
     makePondBound();
 
@@ -285,17 +310,28 @@ class Pond extends GameObject
   }
   private void makePondBound()
   {
-    pondBound = new Rectangle(pond.getBoundsInParent().getMinX(),
+    createBoundingBox(pond.getBoundsInParent().getMinX(),
         pond.getBoundsInParent().getMinY(), pond.getBoundsInParent().getWidth(),
         pond.getBoundsInParent().getHeight());
-    pondBound.setStroke(Color.YELLOW);
-    pondBound.setFill(Color.TRANSPARENT);
-    pondBound.setVisible(!pondBound.isVisible());
-    add(pondBound);
   }
+  /*
   public void showPondBound()
   {
-    pondBound.setVisible(!pondBound.isVisible());
+    bbox.setVisible(!bbox.isVisible());
+  }
+
+   */
+  public boolean isPondCollidingWall()
+  {
+    if (myTranslation.getX()+(pond.getRadius()*2) >= Game.GAME_WIDTH ||
+        myTranslation.getX()-(pond.getRadius()*2)  <= 0 ||
+        myTranslation.getY()+(pond.getRadius()*2) >= Game.GAME_HEIGHT ||
+        myTranslation.getY()+(pond.getRadius()*2) <= Game.HELI_SPAWN_AREA)
+    {
+      return true;
+    }
+    else
+      return false;
   }
   public void fillingPond()
   {
@@ -304,9 +340,16 @@ class Pond extends GameObject
       expandPond();
     }
   }
+  public boolean isPondFull()
+  {
+    if (pondCapacity >= 100)
+      return true;
+    else
+      return false;
+  }
   public void expandPond()
   {
-    pond.setRadius(pond.getRadius() + 0.1);
+    pond.setRadius(pond.getRadius() + expansionIncrement);
   }
   public void resetPond()
   {
@@ -327,7 +370,6 @@ class Cloud extends GameObject
   private Random rand;
   private int cloudCapacity;
   private GameText cloudText;
-  private Rectangle cloudBound;
   private int saturationColor = 255;
 
   public Cloud()
@@ -337,8 +379,7 @@ class Cloud extends GameObject
     cloud = new Circle(50, Color.rgb(saturationColor, saturationColor,
         saturationColor));
     translation(rand.nextInt((int)(Game.GAME_WIDTH+cloud.getRadius())),
-        rand.nextInt((int)(Game.GAME_HEIGHT/2)) +
-            (int)Game.GAME_HEIGHT/2);
+        rand.nextInt((int)Game.GAME_HEIGHT));
 
     makeCloudBound();
 
@@ -353,24 +394,26 @@ class Cloud extends GameObject
   }
   private void makeCloudBound()
   {
-    cloudBound = new Rectangle(cloud.getBoundsInParent().getMinX(),
+    createBoundingBox(cloud.getBoundsInParent().getMinX(),
         cloud.getBoundsInParent().getMinY(),
         cloud.getBoundsInParent().getWidth(),
         cloud.getBoundsInParent().getHeight());
-
-    cloudBound.setStroke(Color.YELLOW);
-    cloudBound.setFill(Color.TRANSPARENT);
-    cloudBound.setVisible(!cloudBound.isVisible());
-
-    add(cloudBound);
-  }
-  public void showCloudBound()
-  {
-    cloudBound.setVisible(!cloudBound.isVisible());
   }
   public Rectangle getCloudBound()
   {
-    return cloudBound;
+    return bbox;
+  }
+  public boolean isCloudCollidingWall()
+  {
+    if (myTranslation.getX()+(cloud.getRadius()*2) >= Game.GAME_WIDTH ||
+        myTranslation.getX()-(cloud.getRadius()*2) <= 0 ||
+        myTranslation.getY()+(cloud.getRadius()*2) >= Game.GAME_HEIGHT ||
+        myTranslation.getY()+(cloud.getRadius()*2) <= Game.HELI_SPAWN_AREA)
+    {
+      return true;
+    }
+    else
+      return false;
   }
   public void resetCloud()
   {
@@ -385,10 +428,10 @@ class Cloud extends GameObject
   {
     if (cloudCapacity < 100) {
       cloudCapacity += 1;
-      if (saturationColor > 0)
+      if (saturationColor > 155)
         cloud.setFill(Color.rgb(--saturationColor,--saturationColor,
             --saturationColor));
-      //System.out.println(saturationColor);
+      System.out.println(saturationColor);
     }
   }
   public void decreaseCloud()
@@ -401,9 +444,12 @@ class Cloud extends GameObject
       //System.out.println(saturationColor);
     }
   }
-  public int getCloudCapacity()
+  public boolean isCloudCapcityOver()
   {
-    return cloudCapacity;
+    if (cloudCapacity >= 30)
+      return true;
+    else
+      return false;
   }
   @Override
   public void update() {
@@ -415,8 +461,7 @@ class HeliPad extends GameObject
 {
   private Rectangle heliPad;
   private Circle padCircle;
-  private Rectangle heliPadBound;
-
+  private int heliPositionY = 25;
   public HeliPad()
   {
     heliPad = new Rectangle(75,75);
@@ -427,34 +472,22 @@ class HeliPad extends GameObject
     padCircle.setStroke(Color.YELLOW);
     padCircle.setCenterX(heliPad.getX()+heliPad.getWidth()/2);
     padCircle.setCenterY(heliPad.getY()+heliPad.getHeight()/2);
-    translation((Game.GAME_WIDTH/2)-(heliPad.getWidth()/2), 100);
+    translation((Game.GAME_WIDTH/2)-(heliPad.getWidth()/2), heliPositionY);
 
     makeHeliPadBound();
-
-    System.out.println(heliPad.getBoundsInParent());
-    System.out.println(padCircle.getBoundsInParent());
 
     add(heliPad);
     add(padCircle);
   }
   private void makeHeliPadBound()
   {
-    heliPadBound = new Rectangle(heliPad.getX(), heliPad.getY(),
-        heliPad.getWidth(), heliPad.getHeight());
-
-    heliPadBound.setStroke(Color.YELLOW);
-    heliPadBound.setStrokeWidth(3);
-    heliPadBound.setFill(Color.TRANSPARENT);
-    heliPadBound.setVisible(!heliPadBound.isVisible());
-    add(heliPadBound);
-  }
-  public void showHeliPadBound()
-  {
-    heliPadBound.setVisible(!heliPadBound.isVisible());
+    createBoundingBox(heliPad.getX(), heliPad.getY(), heliPad.getWidth(),
+        heliPad.getHeight());
+    bbox.setStrokeWidth(3);
   }
   public Rectangle getHeliPadBound()
   {
-    return heliPadBound;
+    return bbox;
   }
   @Override
   public void update() {
@@ -465,11 +498,10 @@ class Helicopter extends GameObject
 {
   private Circle heli;
   private Line heliHead;
-  GameText fuelText;
+  private GameText fuelText;
   private double heliSpeed, heliRot;
-  private int fuel;
-  private Rectangle heliBound;
-  private static double maxSpeed = 10, minSpeed = -2;
+  private double fuel;
+  private static double maxHeliSpeed = 10, minHeliSpeed = -2;
   private boolean ignition = false;
   public Helicopter()
   {
@@ -485,7 +517,7 @@ class Helicopter extends GameObject
     makeHeliHead();
 
 
-    fuelText = new GameText("F:" + fuel);
+    fuelText = new GameText("F:" + (int)fuel);
     fuelText.setTranslateX(heli.getCenterX()-30);
     fuelText.setTranslateY(heli.getCenterY()-15);
     fuelText.setColor(Color.YELLOW);
@@ -504,43 +536,15 @@ class Helicopter extends GameObject
   }
   private void makeHeliBound()
   {
-    heliBound = new Rectangle(fuelText.getBoundsInParent().getMinX(),
+    createBoundingBox(fuelText.getBoundsInParent().getMinX(),
         fuelText.getBoundsInParent().getMinY(),
         fuelText.getBoundsInParent().getWidth(),
         (heliHead.getBoundsInParent().getHeight() +
         heli.getRadius() + fuelText.getBoundsInParent().getHeight()));
-
-    //System.out.println(heliHead.getBoundsInParent());
-    heliBound.setStroke(Color.YELLOW);
-    heliBound.setFill(Color.TRANSPARENT);
-    heliBound.setVisible(!heliBound.isVisible());
-    add(heliBound);
   }
-  @Override
-  public void update() {
-    if (ignition) {
-      fuelText.setText("F:" + fuel);
-      rotation(-heliRot);
-      if (heliSpeed >= maxSpeed)
-        heliSpeed = 10;
-      if (heliSpeed <= minSpeed)
-        heliSpeed = -2;
-      myTranslation.setX(myTranslation.getX() + getVx());
-      myTranslation.setY(myTranslation.getY() + getVy());
-      if (fuel >= -1) {
-        fuel = fuel - 1;
-      }
-      else
-      {
-        fuel = 0;
-      }
-      //System.out.println((int) (1 * Math.abs(heliSpeed)));
-    }
-    else
-    {
-      heliSpeed = 0;
-      heliRot = 0;
-    }
+  public Rectangle getHeliBound()
+  {
+    return bbox;
   }
   public double getVx()
   {
@@ -605,17 +609,38 @@ class Helicopter extends GameObject
       heliSpeed = 0;
     }
   }
-  public int getFuel()
+  public boolean isFuelEmpty()
   {
-    return fuel;
+    if (Math.floor(fuel) == 0)
+      return true;
+    else
+      return false;
   }
-  public void showHeliBound()
-  {
-    heliBound.setVisible(!heliBound.isVisible());
-  }
-  public Rectangle getHeliBound()
-  {
-    return heliBound;
+  @Override
+  public void update() {
+    if (ignition) {
+      fuelText.setText("F:" + (int)fuel);
+      rotation(-heliRot);
+      if (heliSpeed >= maxHeliSpeed)
+        heliSpeed = 10;
+      if (heliSpeed <= minHeliSpeed)
+        heliSpeed = -2;
+      myTranslation.setX(myTranslation.getX() + getVx());
+      myTranslation.setY(myTranslation.getY() + getVy());
+      if (fuel >= 0) {
+        fuel = fuel - ( 1 + (heliSpeed/maxHeliSpeed) +
+            Math.abs(heliSpeed/minHeliSpeed));
+      }
+      else
+      {
+        fuel = 0;
+      }
+    }
+    else
+    {
+      heliSpeed = 0;
+      heliRot = 0;
+    }
   }
 }
 public class GameApp extends Application {
