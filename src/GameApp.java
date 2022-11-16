@@ -86,13 +86,14 @@ class Game extends Pane
       //System.out.println("POND COLLIDE WALL");
       pond.resetPond();
       this.repositionPondCloud();
-    }
+    }/*
     if (cloud.isCloudCollidingWall())
     {
       //System.out.println("CLOUD COLLIDE WALL");
       cloud.resetCloud();
       this.repositionPondCloud();
     }
+    */
   }
   private void winLossCondition(AnimationTimer GameTimer)
   {
@@ -243,8 +244,8 @@ abstract class GameObject extends Group implements Updatable
     myScale.setX(sx);
     myScale.setY(sy);
   }
-  public void createBoundingBox(double minX, double minY, double height,
-                                double width)
+  public void createBoundingBox(double minX, double minY, double width,
+                                double height)
   {
     bbox = new Rectangle(minX, minY, width, height);
     bbox.setStroke(Color.YELLOW);
@@ -394,8 +395,8 @@ class Cloud extends GameObject
     cloudCapacity = 0;
     cloud = new Circle(50, Color.rgb(saturationColor, saturationColor,
         saturationColor));
-    translation(rand.nextInt((int)(Game.GAME_WIDTH+cloud.getRadius())),
-        rand.nextInt((int)Game.GAME_HEIGHT));
+    translation(rand.nextInt((int)(Game.GAME_WIDTH-cloud.getRadius())),
+        rand.nextInt((int)Game.GAME_HEIGHT/2) + Game.GAME_HEIGHT/2);
 
     makeCloudBound();
 
@@ -471,6 +472,7 @@ class Cloud extends GameObject
   @Override
   public void update() {
     cloudText.setText(cloudCapacity + "%");
+    myTranslation.setX(myTranslation.getX() + 0.1);
     //System.out.println(cloudCapacity);
   }
 }
@@ -478,14 +480,14 @@ class HeliPad extends GameObject
 {
   private Rectangle heliPad;
   private Circle padCircle;
-  private int heliPositionY = 25;
+  private int heliPositionY = 100;
   public HeliPad()
   {
-    heliPad = new Rectangle(75,75);
+    heliPad = new Rectangle(100,100);
     heliPad.setStroke(Color.GRAY);
 
     padCircle = new Circle();
-    padCircle.setRadius(30);
+    padCircle.setRadius(40);
     padCircle.setStroke(Color.YELLOW);
     padCircle.setCenterX(heliPad.getX()+heliPad.getWidth()/2);
     padCircle.setCenterY(heliPad.getY()+heliPad.getHeight()/2);
@@ -513,52 +515,45 @@ class HeliPad extends GameObject
 }
 class Helicopter extends GameObject
 {
-  private Circle heli;
-  private Line heliHead;
   private GameText fuelText;
   private double heliSpeed, heliHeading;
   private double fuel;
   private static double maxHeliSpeed = 10, minHeliSpeed = -2;
   private boolean ignition;
+  private HeloBody heliBody;
+  private HeloBlade heliBlade;
   public Helicopter()
   {
     //NOTHING IS CREATED
   }
   public Helicopter(double centerX, double centerY)
   {
-    fuel = 1000;
+    fuel = 25000;
     heliSpeed = 0;
     heliHeading = 0;
     ignition = false;
-    heli = new Circle(10);
-    heli.setFill(Color.YELLOW);
-    translation(centerX, centerY);
-    makeHeliHead();
+    heliBody = new HeloBody();
+    heliBlade = new HeloBlade();
+    translation(centerX-heliBody.getBoundsInParent().getWidth()/2,
+        centerY-heliBody.getBoundsInParent().getHeight()/5);
 
     fuelText = new GameText("F:" + (int)fuel);
-    fuelText.setTranslateX(heli.getCenterX()-30);
-    fuelText.setTranslateY(heli.getCenterY()-15);
+    fuelText.setTranslateX(heliBody.getTranslateX()+heliBody.getBoundsInParent().getWidth()/5);
+    fuelText.setTranslateY(heliBody.getTranslateY()-15);
     fuelText.setColor(Color.YELLOW);
-
+    System.out.println(heliBlade.getBoundsInParent());
     makeHeliBound();
 
-    add(heli);
-    add(heliHead);
+    add(heliBody);
+    add(heliBlade);
     add(fuelText);
-  }
-  private void makeHeliHead()
-  {
-    heliHead = new Line(heli.getCenterX(), heli.getCenterY(), heli.getCenterX(),
-        heli.getCenterY()+25);
-    heliHead.setStroke(Color.YELLOW);
   }
   private void makeHeliBound()
   {
     createBoundingBox(fuelText.getBoundsInParent().getMinX(),
         fuelText.getBoundsInParent().getMinY(),
         fuelText.getBoundsInParent().getWidth(),
-        (heliHead.getBoundsInParent().getHeight() +
-        heli.getRadius() + fuelText.getBoundsInParent().getHeight()));
+        heliBlade.getBoundsInParent().getMaxY());
   }
   public Rectangle getHeliBound()
   {
@@ -652,6 +647,28 @@ class Helicopter extends GameObject
     moveHelicopter();
   }
 }
+class HeloBody extends GameObject
+{
+  private Image heloBody;
+  private ImageView imgView;
+  public HeloBody()
+  {
+    heloBody = new Image("heliBody.png");
+    imgView = new ImageView(heloBody);
+    getChildren().add(imgView);
+  }
+}
+class HeloBlade extends GameObject
+{
+  private Image heloBlade;
+  private ImageView imgView;
+  public HeloBlade()
+  {
+    heloBlade = new Image("heliBlade.png");
+    imgView = new ImageView(heloBlade);
+    getChildren().add(imgView);
+  }
+}
 public class GameApp extends Application {
   Game game;
   @Override
@@ -673,16 +690,13 @@ public class GameApp extends Application {
         case     I: game.startHelicopter(); break;
         case     B: game.turnOnBoundary(); break;
         case     R: game.init(); break;
-
         default: ;
       }
     });
     game.run();
     primaryStage.show();
   }
-
   public static void main(String[] args) {
         launch(args);
     }
 }
-
