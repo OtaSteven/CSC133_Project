@@ -47,7 +47,6 @@ class Game extends Pane
     setScaleY(-1);
     setBackground(new Background(new BackgroundFill(Color.BLACK,
         new CornerRadii(0), Insets.EMPTY)));
-
     init();
   }
   public void init()
@@ -84,13 +83,13 @@ class Game extends Pane
     }
     if (pond.isPondCollidingWall())
     {
-      System.out.println("POND COLLIDE WALL");
+      //System.out.println("POND COLLIDE WALL");
       pond.resetPond();
       this.repositionPondCloud();
     }
     if (cloud.isCloudCollidingWall())
     {
-      System.out.println("CLOUD COLLIDE WALL");
+      //System.out.println("CLOUD COLLIDE WALL");
       cloud.resetCloud();
       this.repositionPondCloud();
     }
@@ -105,6 +104,7 @@ class Game extends Pane
       alert.setOnHidden(event -> {
         if (alert.getResult() == ButtonType.YES) {
           init();
+          run();
         } else {
           //SOMEHOW EXIT STAGE
           Platform.exit();
@@ -121,6 +121,7 @@ class Game extends Pane
       alert.setOnHidden(event -> {
         if (alert.getResult() == ButtonType.YES) {
           init();
+          run();
         } else {
           //SOMEHOW EXIT STAGE
           Platform.exit();
@@ -158,7 +159,7 @@ class Game extends Pane
     if (!Shape.intersect(helicopter.getHeliBound(),
         heliPad.getHeliPadBound()).getBoundsInParent().isEmpty())
     {
-      if (isHeliMoving == false) {
+      if (!isHeliMoving) {
         helicopter.startIgnitition();
         isHeliMoving = true;
       }
@@ -301,7 +302,6 @@ class Pond extends GameObject
   private Circle pond;
   private Random rand;
   private GameText pondText;
-  private Rectangle pondBound;
   private int pondCapacity;
   private double expansionIncrement = 0.5;
   public Pond()
@@ -373,7 +373,7 @@ class Pond extends GameObject
         rand.nextInt((int)(Game.GAME_HEIGHT)));
     pondText.setTranslateX(pond.getCenterX()-15);
     pondText.setTranslateY(pond.getCenterY()+10);
-    System.out.println("POND INTERSECT");
+    //System.out.println("POND INTERSECT");
   }
   @Override
   public void update() {
@@ -438,7 +438,7 @@ class Cloud extends GameObject
             (int)Game.GAME_HEIGHT/2);
     cloudText.setTranslateX(cloud.getCenterX()-15);
     cloudText.setTranslateY(cloud.getCenterY()+10);
-    System.out.println("CLOUD INTERSECT");
+    //System.out.println("CLOUD INTERSECT");
   }
   public void increaseCloud()
   {
@@ -519,20 +519,21 @@ class Helicopter extends GameObject
   private double heliSpeed, heliHeading;
   private double fuel;
   private static double maxHeliSpeed = 10, minHeliSpeed = -2;
-  private boolean ignition = false;
+  private boolean ignition;
   public Helicopter()
   {
     //NOTHING IS CREATED
   }
   public Helicopter(double centerX, double centerY)
   {
-    fuel = 25000;
+    fuel = 1000;
     heliSpeed = 0;
+    heliHeading = 0;
+    ignition = false;
     heli = new Circle(10);
     heli.setFill(Color.YELLOW);
     translation(centerX, centerY);
     makeHeliHead();
-
 
     fuelText = new GameText("F:" + (int)fuel);
     fuelText.setTranslateX(heli.getCenterX()-30);
@@ -601,29 +602,16 @@ class Helicopter extends GameObject
   }
   public void startIgnitition()
   {
-    if (ignition == false) {
-      /*int timer = 3;
-      while (timer != 0) {
-        try {
-          System.out.println("Helicopter starting in " + timer + "...");
-          Thread.sleep(1000);
-        } catch (InterruptedException e) {
-          System.err.format("IOException: %s%n", e);
-        }
-        timer -= 1;
-      }
-      System.out.println("Helicopter starting in " + timer + "...");*/
-      System.out.println("Ready to fly!");
-      ignition = true;
-    }
+    System.out.println("Ready to fly!");
+    ignition = true;
   }
   public void stopIgnition()
   {
-    if (ignition == true && (Math.floor(heliSpeed) <= 0.1 &&
+    if (ignition && (Math.floor(heliSpeed) <= 0.1 &&
         Math.floor(heliSpeed) >= -0.1))
     {
-      ignition = false;
       heliSpeed = 0;
+      ignition = false;
     }
   }
   public boolean isFuelEmpty()
