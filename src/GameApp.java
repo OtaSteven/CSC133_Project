@@ -7,6 +7,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -236,8 +237,8 @@ abstract class GameObject extends Group implements Updatable
   public void rotation(double degree)
   {
     myRotation.setAngle(degree);
-    myRotation.setPivotX(0);
-    myRotation.setPivotY(0);
+    //myRotation.setPivotX(0);
+    //myRotation.setPivotY(0);
   }
   public void scale(double sx, double sy)
   {
@@ -533,15 +534,20 @@ class Helicopter extends GameObject
     heliHeading = 0;
     ignition = false;
     heliBody = new HeloBody();
-    heliBlade = new HeloBlade();
+    heliBlade = new HeloBlade(heliBody.getBoundsInParent().getWidth(),
+        heliBody.getBoundsInParent().getHeight());
+
+    myRotation.setPivotX(heliBody.getBoundsInParent().getWidth()/2);
+    myRotation.setPivotY(heliBody.getBoundsInParent().getHeight()/2);
+
     translation(centerX-heliBody.getBoundsInParent().getWidth()/2,
-        centerY-heliBody.getBoundsInParent().getHeight()/5);
+        centerY-heliBody.getBoundsInParent().getHeight()/2);
 
     fuelText = new GameText("F:" + (int)fuel);
-    fuelText.setTranslateX(heliBody.getTranslateX()+heliBody.getBoundsInParent().getWidth()/5);
+    fuelText.setTranslateX(heliBody.getTranslateX() +
+        heliBody.getBoundsInParent().getWidth()/5);
     fuelText.setTranslateY(heliBody.getTranslateY()-15);
     fuelText.setColor(Color.YELLOW);
-    System.out.println(heliBlade.getBoundsInParent());
     makeHeliBound();
 
     add(heliBody);
@@ -550,10 +556,15 @@ class Helicopter extends GameObject
   }
   private void makeHeliBound()
   {
+    /*
     createBoundingBox(fuelText.getBoundsInParent().getMinX(),
         fuelText.getBoundsInParent().getMinY(),
         fuelText.getBoundsInParent().getWidth(),
-        heliBlade.getBoundsInParent().getMaxY());
+        heliBlade.getBoundsInParent().getHeight());
+     */
+    createBoundingBox(heliBlade.getBoundsInParent().getMinX(),
+        heliBlade.getBoundsInParent().getMinY(),
+        heliBlade.getBoundsInParent().getWidth(), heliBlade.getBoundsInParent().getHeight());
   }
   public Rectangle getHeliBound()
   {
@@ -655,18 +666,49 @@ class HeloBody extends GameObject
   {
     heloBody = new Image("heliBody.png");
     imgView = new ImageView(heloBody);
+    scale(0.3,0.3);
+    System.out.println(imgView.getBoundsInParent());
     getChildren().add(imgView);
   }
 }
 class HeloBlade extends GameObject
 {
-  private Image heloBlade;
-  private ImageView imgView;
-  public HeloBlade()
+  private Line heliBlade;
+  private Circle heliPoint;
+  public HeloBlade(double width, double height)
   {
+    heliBlade = new Line(0, 0, width,height);
+    heliBlade.setStrokeWidth(5);
+    heliPoint = new Circle(2, Color.WHITE);
+    heliPoint.setCenterX(width/2);
+    heliPoint.setCenterY(height/2);
+    translation(0,7);
+    add(heliBlade);
+    add(heliPoint);
+    myRotation.setPivotX(width/2);
+    myRotation.setPivotY(height/2);
+    moveBlade();
+    /*
     heloBlade = new Image("heliBlade.png");
     imgView = new ImageView(heloBlade);
+    scale(0.4, 0.4);
+    imgView.setX(0);
+    imgView.setY(0);
+    System.out.println(imgView.getBoundsInParent());
     getChildren().add(imgView);
+     */
+  }
+  public void moveBlade()
+  {
+    AnimationTimer loop = new AnimationTimer() {
+      @Override
+      public void handle(long now) {
+
+        rotation(getMyRotation()+1);
+
+      }
+    };
+    loop.start();
   }
 }
 public class GameApp extends Application {
