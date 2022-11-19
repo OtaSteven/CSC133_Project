@@ -7,7 +7,6 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -29,8 +28,13 @@ interface Updatable
 {
   void update();
 }
+interface State
+{
+  void changeState();
+}
 class Game extends Pane
 {
+  final static double WIND_SPEED = 1;
   final static double GAME_WIDTH = 400;
   final static double GAME_HEIGHT = 800;
   final static double HELI_SPAWN_AREA = 250;
@@ -59,10 +63,8 @@ class Game extends Pane
     pond = new Pond();
     cloud = new Cloud();
     heliPad = new HeliPad();
-    helicopter = new Helicopter(heliPad.myTranslation.getX() +
-        heliPad.getBoundsInParent().getWidth()/2,
-        heliPad.myTranslation.getY() +
-            heliPad.getBoundsInParent().getHeight()/2);
+    helicopter = new Helicopter(heliPad.myTranslation.getX(),
+        heliPad.myTranslation.getY());
 
     repositionPondCloud();
     getChildren().add(bgImg);
@@ -73,8 +75,6 @@ class Game extends Pane
   }
   private void repositionPondCloud()
   {
-    //System.out.println("POND: " + pond.getBoundsInParent());
-    //System.out.println("CLOUD: " + cloud.getBoundsInParent());
     if (pond.getBoundsInParent().intersects(cloud.getBoundsInParent()) ||
         cloud.getBoundsInParent().intersects(pond.getBoundsInParent()))
     {
@@ -84,17 +84,9 @@ class Game extends Pane
     }
     if (pond.isPondCollidingWall())
     {
-      //System.out.println("POND COLLIDE WALL");
       pond.resetPond();
       this.repositionPondCloud();
-    }/*
-    if (cloud.isCloudCollidingWall())
-    {
-      //System.out.println("CLOUD COLLIDE WALL");
-      cloud.resetCloud();
-      this.repositionPondCloud();
     }
-    */
   }
   private void winLossCondition(AnimationTimer GameTimer)
   {
@@ -108,7 +100,6 @@ class Game extends Pane
           init();
           run();
         } else {
-          //SOMEHOW EXIT STAGE
           Platform.exit();
         }
       });
@@ -125,7 +116,6 @@ class Game extends Pane
           init();
           run();
         } else {
-          //SOMEHOW EXIT STAGE
           Platform.exit();
         }
       });
@@ -196,8 +186,6 @@ class Game extends Pane
         }
         cloud.update();
         pond.update();
-        //System.out.println("HELICOPTER: " + helicopter.getBoundsInParent());
-        //System.out.println("cloud: " +pondCloud.cloud.getBoundsInParent());
       }
     };
     loop.start();
@@ -205,7 +193,6 @@ class Game extends Pane
 }
 class BackgroundImg extends Pane
 {
-  private BackgroundImage bg;
   private Image img;
   private ImageView imgView;
   public BackgroundImg()
@@ -237,8 +224,8 @@ abstract class GameObject extends Group implements Updatable
   public void rotation(double degree)
   {
     myRotation.setAngle(degree);
-    //myRotation.setPivotX(0);
-    //myRotation.setPivotY(0);
+    myRotation.setPivotX(0);
+    myRotation.setPivotY(0);
   }
   public void scale(double sx, double sy)
   {
@@ -332,13 +319,6 @@ class Pond extends GameObject
         pond.getBoundsInParent().getMinY(), pond.getBoundsInParent().getWidth(),
         pond.getBoundsInParent().getHeight());
   }
-  /*
-  public void showPondBound()
-  {
-    bbox.setVisible(!bbox.isVisible());
-  }
-
-   */
   public boolean isPondCollidingWall()
   {
     if (myTranslation.getX()+(pond.getRadius()*2) >= Game.GAME_WIDTH ||
@@ -394,20 +374,23 @@ class Cloud extends GameObject
   {
     rand = new Random();
     cloudCapacity = 0;
-    cloud = new Circle(50, Color.rgb(saturationColor, saturationColor,
-        saturationColor));
+
+    createCloud();
+
     translation(rand.nextInt((int)(Game.GAME_WIDTH-cloud.getRadius())),
         rand.nextInt((int)Game.GAME_HEIGHT/2) + Game.GAME_HEIGHT/2);
 
     makeCloudBound();
-
-    add(cloud);
-
+  }
+  private void createCloud()
+  {
+    cloud = new Circle(50, Color.rgb(saturationColor, saturationColor,
+        saturationColor));
     cloudText = new GameText("0%");
     cloudText.setTranslateX(cloud.getCenterX()-15);
     cloudText.setTranslateY(cloud.getCenterY()+10);
     cloudText.setColor(Color.BLUE);
-
+    add(cloud);
     add(cloudText);
   }
   private void makeCloudBound()
@@ -424,7 +407,6 @@ class Cloud extends GameObject
   public boolean isCloudCollidingWall()
   {
     if (myTranslation.getX()+(cloud.getRadius()*2) >= Game.GAME_WIDTH ||
-        myTranslation.getX()-(cloud.getRadius()*2) <= 0 ||
         myTranslation.getY()+(cloud.getRadius()*2) >= Game.GAME_HEIGHT ||
         myTranslation.getY()+(cloud.getRadius()*2) <= Game.HELI_SPAWN_AREA)
     {
@@ -440,7 +422,6 @@ class Cloud extends GameObject
             (int)Game.GAME_HEIGHT/2);
     cloudText.setTranslateX(cloud.getCenterX()-15);
     cloudText.setTranslateY(cloud.getCenterY()+10);
-    //System.out.println("CLOUD INTERSECT");
   }
   public void increaseCloud()
   {
@@ -473,8 +454,7 @@ class Cloud extends GameObject
   @Override
   public void update() {
     cloudText.setText(cloudCapacity + "%");
-    myTranslation.setX(myTranslation.getX() + 0.1);
-    //System.out.println(cloudCapacity);
+    myTranslation.setX(myTranslation.getX() + Game.WIND_SPEED);
   }
 }
 class HeliPad extends GameObject
@@ -490,9 +470,11 @@ class HeliPad extends GameObject
     padCircle = new Circle();
     padCircle.setRadius(40);
     padCircle.setStroke(Color.YELLOW);
-    padCircle.setCenterX(heliPad.getX()+heliPad.getWidth()/2);
-    padCircle.setCenterY(heliPad.getY()+heliPad.getHeight()/2);
-    translation((Game.GAME_WIDTH/2)-(heliPad.getWidth()/2), heliPositionY);
+
+    heliPad.setX(padCircle.getCenterX()-heliPad.getWidth()/2);
+    heliPad.setY(padCircle.getCenterY()-heliPad.getHeight()/2);
+
+    translation((Game.GAME_WIDTH/2), heliPositionY);
 
     makeHeliPadBound();
 
@@ -514,15 +496,17 @@ class HeliPad extends GameObject
     //DO NOTHING
   }
 }
-class Helicopter extends GameObject
+class Helicopter extends GameObject implements State
 {
   private GameText fuelText;
   private double heliSpeed, heliHeading;
   private double fuel;
   private static double maxHeliSpeed = 10, minHeliSpeed = -2;
-  private boolean ignition;
+  private boolean off, starting, ready, stopping;
   private HeloBody heliBody;
   private HeloBlade heliBlade;
+  private Circle heli;
+  private Line heliHead;
   public Helicopter()
   {
     //NOTHING IS CREATED
@@ -532,39 +516,40 @@ class Helicopter extends GameObject
     fuel = 25000;
     heliSpeed = 0;
     heliHeading = 0;
-    ignition = false;
-    heliBody = new HeloBody();
+
+    off = false;
+    starting = false;
+    ready = false;
+    stopping = false;
+
+    heliBody = new HeloBody(centerX, centerY);
+
     heliBlade = new HeloBlade(heliBody.getBoundsInParent().getWidth(),
         heliBody.getBoundsInParent().getHeight());
 
-    myRotation.setPivotX(heliBody.getBoundsInParent().getWidth()/2);
-    myRotation.setPivotY(heliBody.getBoundsInParent().getHeight()/2);
-
-    translation(centerX-heliBody.getBoundsInParent().getWidth()/2,
-        centerY-heliBody.getBoundsInParent().getHeight()/2);
-
     fuelText = new GameText("F:" + (int)fuel);
-    fuelText.setTranslateX(heliBody.getTranslateX() +
-        heliBody.getBoundsInParent().getWidth()/5);
-    fuelText.setTranslateY(heliBody.getTranslateY()-15);
     fuelText.setColor(Color.YELLOW);
+
+    translation(centerX, centerY);
+
     makeHeliBound();
 
+    add(fuelText);
     add(heliBody);
     add(heliBlade);
-    add(fuelText);
+  }
+  private void makeHeliHead()
+  {
+    heliHead = new Line(heli.getCenterX(), heli.getCenterY(), heli.getCenterX(),
+        heli.getCenterY()+25);
+    heliHead.setStroke(Color.YELLOW);
   }
   private void makeHeliBound()
   {
-    /*
-    createBoundingBox(fuelText.getBoundsInParent().getMinX(),
-        fuelText.getBoundsInParent().getMinY(),
-        fuelText.getBoundsInParent().getWidth(),
-        heliBlade.getBoundsInParent().getHeight());
-     */
     createBoundingBox(heliBlade.getBoundsInParent().getMinX(),
         heliBlade.getBoundsInParent().getMinY(),
-        heliBlade.getBoundsInParent().getWidth(), heliBlade.getBoundsInParent().getHeight());
+        heliBlade.getBoundsInParent().getWidth(),
+        heliBlade.getBoundsInParent().getHeight());
   }
   public Rectangle getHeliBound()
   {
@@ -585,8 +570,6 @@ class Helicopter extends GameObject
     {
       heliHeading = 0;
     }
-    //System.out.println("ROTATION: " + getMyRotation());
-    //System.out.println("HELIROT: " + heliRot);
   }
   public void rotateRight()
   {
@@ -595,8 +578,6 @@ class Helicopter extends GameObject
     {
       heliHeading = 0;
     }
-    //System.out.println("ROTATION: " + getMyRotation());
-    //System.out.println("HELIROT: " + heliRot);
   }
   public void increaseSpeed()
   {
@@ -608,16 +589,17 @@ class Helicopter extends GameObject
   }
   public void startIgnitition()
   {
-    System.out.println("Ready to fly!");
-    ignition = true;
+    System.out.println("Starting up");
+    off = true;
+    changeState();
   }
   public void stopIgnition()
   {
-    if (ignition && (Math.floor(heliSpeed) <= 0.1 &&
+    if (!off && (Math.floor(heliSpeed) <= 0.1 &&
         Math.floor(heliSpeed) >= -0.1))
     {
       heliSpeed = 0;
-      ignition = false;
+      off = true;
     }
   }
   public boolean isFuelEmpty()
@@ -629,15 +611,18 @@ class Helicopter extends GameObject
   }
   private void moveHelicopter()
   {
-    if (ignition) {
+    if (ready) {
       fuelText.setText("F:" + (int)fuel);
-      rotation(-heliHeading);
       if (heliSpeed >= maxHeliSpeed)
         heliSpeed = 10;
       if (heliSpeed <= minHeliSpeed)
         heliSpeed = -2;
-      myTranslation.setX(myTranslation.getX() + getVx());
-      myTranslation.setY(myTranslation.getY() + getVy());
+
+      translation(myTranslation.getX()+getVx(),
+          myTranslation.getY()+getVy());
+
+      rotation(-heliHeading);
+
       if (fuel >= 0) {
         fuel = fuel - ( 1 + (heliSpeed/maxHeliSpeed) +
             Math.abs(heliSpeed/minHeliSpeed));
@@ -653,59 +638,78 @@ class Helicopter extends GameObject
       heliHeading = 0;
     }
   }
+  public void changeState()
+  {
+    if (off)
+    {
+      off = false;
+      starting = true;
+    }
+    else if (starting)
+    {
+      heliBlade.moveBlade();
+      fuelText.setText("F:" + (int)fuel);
+      fuel = fuel - 1;
+
+      if (-heliBlade.getMyRotation() > 1800) {
+        System.out.println("Ready to fly!");
+        heliSpeed = 0;
+        heliHeading = 0;
+        starting = false;
+        ready = true;
+      }
+    }
+    if (ready) {
+      moveHelicopter();
+
+    }
+  }
   @Override
   public void update() {
-    moveHelicopter();
+    changeState();
   }
 }
 class HeloBody extends GameObject
 {
   private Image heloBody;
   private ImageView imgView;
-  public HeloBody()
+  public HeloBody(double centerX, double centerY)
   {
     heloBody = new Image("heliBody.png");
     imgView = new ImageView(heloBody);
     scale(0.3,0.3);
-    System.out.println(imgView.getBoundsInParent());
-    getChildren().add(imgView);
+    translation(imgView.getBoundsInParent().getWidth() -
+            (imgView.getBoundsInParent().getWidth()+centerX/6),
+        imgView.getBoundsInParent().getHeight() -
+            (imgView.getBoundsInParent().getHeight()+centerY/2));
+    add(imgView);
   }
 }
 class HeloBlade extends GameObject
 {
   private Line heliBlade;
   private Circle heliPoint;
+  private double speedRotation;
   public HeloBlade(double width, double height)
   {
-    heliBlade = new Line(0, 0, width,height);
+    speedRotation = 0.5;
+    heliPoint = new Circle(3, Color.WHITE);
+    heliBlade = new Line(-(width/2), -(height/2), width/2, height/2);
     heliBlade.setStrokeWidth(5);
-    heliPoint = new Circle(2, Color.WHITE);
-    heliPoint.setCenterX(width/2);
-    heliPoint.setCenterY(height/2);
-    translation(0,7);
+    translation(0, 10);
     add(heliBlade);
     add(heliPoint);
-    myRotation.setPivotX(width/2);
-    myRotation.setPivotY(height/2);
-    moveBlade();
-    /*
-    heloBlade = new Image("heliBlade.png");
-    imgView = new ImageView(heloBlade);
-    scale(0.4, 0.4);
-    imgView.setX(0);
-    imgView.setY(0);
-    System.out.println(imgView.getBoundsInParent());
-    getChildren().add(imgView);
-     */
   }
   public void moveBlade()
   {
     AnimationTimer loop = new AnimationTimer() {
+      int iteration = 0;
       @Override
       public void handle(long now) {
 
-        rotation(getMyRotation()+1);
-
+        if (iteration++ % 10 == 0) {
+          rotation(getMyRotation() - speedRotation);
+        }
       }
     };
     loop.start();
