@@ -1,3 +1,4 @@
+import javafx.animation.Animation;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -28,10 +29,6 @@ interface Updatable
 {
   void update();
 }
-interface State
-{
-  void changeState();
-}
 class Game extends Pane
 {
   final static double WIND_SPEED = 1;
@@ -46,7 +43,6 @@ class Game extends Pane
   private Helicopter helicopter;
   private Text msg;
   private Alert alert;
-  private boolean isHeliMoving = false;
   public Game()
   {
     setScaleY(-1);
@@ -58,7 +54,6 @@ class Game extends Pane
   {
     getChildren().clear();
     msg = new Text();
-    isHeliMoving = false;
     bgImg = new BackgroundImg();
     pond = new Pond();
     cloud = new Cloud();
@@ -105,7 +100,7 @@ class Game extends Pane
       });
       alert.show();
     }
-    else if (pond.isPondFull() && isHeliMoving == false)
+    else if (pond.isPondFull())
     {
       GameTimer.stop();
       msg.setText("You have won! Play again?");
@@ -151,14 +146,7 @@ class Game extends Pane
     if (!Shape.intersect(helicopter.getHeliBound(),
         heliPad.getHeliPadBound()).getBoundsInParent().isEmpty())
     {
-      if (!isHeliMoving) {
-        helicopter.startIgnitition();
-        isHeliMoving = true;
-      }
-      else {
-        helicopter.stopIgnition();
-        isHeliMoving = false;
-      }
+      helicopter.toggleIgnition();
     }
   }
   public void turnOnBoundary()
@@ -496,17 +484,127 @@ class HeliPad extends GameObject
     //DO NOTHING
   }
 }
-class Helicopter extends GameObject implements State
+interface HeliState
+{
+  void toggleIgnition();
+  int spinBlade(int spinSpeed);
+  int getState();
+}
+class HeliStateOff implements HeliState
+{
+  Helicopter heli;
+  public HeliStateOff(Helicopter heli)
+  {
+    this.heli = heli;
+  }
+  @Override
+  public void toggleIgnition() {
+    System.out.println("HELI CHANGE OFF TO STARTING");
+    heli.changeState(new HeliStateStarting(heli));
+  }
+  @Override
+  public int spinBlade(int spinSpeed){
+    spinSpeed = 0;
+    return spinSpeed;
+  }
+  @Override
+  public int getState()
+  {
+    return 0;
+  }
+}
+class HeliStateStarting implements HeliState
+{
+  Helicopter heli;
+  public HeliStateStarting(Helicopter heli)
+  {
+    this.heli = heli;
+  }
+  @Override
+  public void toggleIgnition() {
+    System.out.println("HELI Starting TO STOPPING");
+    heli.changeState(new HeliStateStopping(heli));
+  }
+  @Override
+  public int spinBlade(int spinSpeed){
+    spinSpeed += 1;
+    System.out.println(spinSpeed);
+    if (spinSpeed == 3) {
+      heli.changeState(new HeliStateReady(heli));
+      System.out.println("HELI Starting TO READY");
+    }
+    return spinSpeed;
+  }
+  @Override
+  public int getState()
+  {
+    return 1;
+  }
+}
+class HeliStateReady implements HeliState
+{
+  Helicopter heli;
+  public HeliStateReady(Helicopter heli)
+  {
+    this.heli = heli;
+  }
+  @Override
+  public void toggleIgnition() {
+    System.out.println("HELI Ready TO STOPPING");
+    heli.changeState(new HeliStateStopping(heli));
+  }
+  @Override
+  public int spinBlade(int spinSpeed){
+    spinSpeed = 3;
+    System.out.println(spinSpeed);
+    return spinSpeed;
+  }
+  @Override
+  public int getState()
+  {
+    return 2;
+  }
+}
+class HeliStateStopping implements HeliState
+{
+  Helicopter heli;
+  public HeliStateStopping(Helicopter heli)
+  {
+    this.heli = heli;
+  }
+  @Override
+  public void toggleIgnition() {
+    System.out.println("HELI Stopping TO STARTING");
+    heli.changeState(new HeliStateStarting(heli));
+  }
+  @Override
+  public int spinBlade(int spinSpeed){
+    spinSpeed -= 1;
+    if (spinSpeed == 0) {
+      System.out.println("HELI STOPPING TO OFF");
+      heli.changeState(new HeliStateOff(heli));
+    }
+    return spinSpeed;
+  }
+  @Override
+  public int getState()
+  {
+    return 3;
+  }
+}
+class Helicopter extends GameObject implements HeliState
 {
   private GameText fuelText;
   private double heliSpeed, heliHeading;
   private double fuel;
   private static double maxHeliSpeed = 10, minHeliSpeed = -2;
-  private boolean off, starting, ready, stopping;
+  protected HeliState state;
   private HeloBody heliBody;
   private HeloBlade heliBlade;
-  private Circle heli;
-  private Line heliHead;
+  protected int bladeRot;
+  protected int delayRot = 75;
+  private boolean ignition;
+
   public Helicopter()
   {
     //NOTHING IS CREATED
@@ -516,16 +614,13 @@ class Helicopter extends GameObject implements State
     fuel = 25000;
     heliSpeed = 0;
     heliHeading = 0;
+    bladeRot = 0;
 
-    off = false;
-    starting = false;
-    ready = false;
-    stopping = false;
+    ignition = false;
 
-    heliBody = new HeloBody(centerX, centerY);
+    heliBody = new HeloBody();
 
-    heliBlade = new HeloBlade(heliBody.getBoundsInParent().getWidth(),
-        heliBody.getBoundsInParent().getHeight());
+    heliBlade = new HeloBlade();
 
     fuelText = new GameText("F:" + (int)fuel);
     fuelText.setColor(Color.YELLOW);
@@ -537,12 +632,9 @@ class Helicopter extends GameObject implements State
     add(fuelText);
     add(heliBody);
     add(heliBlade);
-  }
-  private void makeHeliHead()
-  {
-    heliHead = new Line(heli.getCenterX(), heli.getCenterY(), heli.getCenterX(),
-        heli.getCenterY()+25);
-    heliHead.setStroke(Color.YELLOW);
+    this.state = new HeliStateOff(this);
+    getTransforms().clear();
+    getTransforms().addAll(myTranslation, myRotation, myScale);
   }
   private void makeHeliBound()
   {
@@ -587,21 +679,6 @@ class Helicopter extends GameObject implements State
   {
     heliSpeed -= 0.1;
   }
-  public void startIgnitition()
-  {
-    System.out.println("Starting up");
-    off = true;
-    changeState();
-  }
-  public void stopIgnition()
-  {
-    if (!off && (Math.floor(heliSpeed) <= 0.1 &&
-        Math.floor(heliSpeed) >= -0.1))
-    {
-      heliSpeed = 0;
-      off = true;
-    }
-  }
   public boolean isFuelEmpty()
   {
     if (Math.floor(fuel) == 0)
@@ -611,109 +688,99 @@ class Helicopter extends GameObject implements State
   }
   private void moveHelicopter()
   {
-    if (ready) {
-      fuelText.setText("F:" + (int)fuel);
+      fuelText.setText("F:" + (int) fuel);
       if (heliSpeed >= maxHeliSpeed)
         heliSpeed = 10;
       if (heliSpeed <= minHeliSpeed)
         heliSpeed = -2;
 
-      translation(myTranslation.getX()+getVx(),
-          myTranslation.getY()+getVy());
+      translation(myTranslation.getX() + getVx(),
+          myTranslation.getY() + getVy());
 
       rotation(-heliHeading);
-
       if (fuel >= 0) {
-        fuel = fuel - ( 1 + (heliSpeed/maxHeliSpeed) +
-            Math.abs(heliSpeed/minHeliSpeed));
-      }
-      else
-      {
+        fuel = fuel - (1 + (heliSpeed / maxHeliSpeed) +
+            Math.abs(heliSpeed / minHeliSpeed));
+      } else {
         fuel = 0;
       }
-    }
-    else
-    {
-      heliSpeed = 0;
-      heliHeading = 0;
-    }
-  }
-  public void changeState()
-  {
-    if (off)
-    {
-      off = false;
-      starting = true;
-    }
-    else if (starting)
-    {
-      heliBlade.moveBlade();
-      fuelText.setText("F:" + (int)fuel);
-      fuel = fuel - 1;
 
-      if (-heliBlade.getMyRotation() > 1800) {
-        System.out.println("Ready to fly!");
-        heliSpeed = 0;
-        heliHeading = 0;
-        starting = false;
-        ready = true;
+      if (delayRot == 0) {
+        bladeRot = spinBlade(bladeRot);
+        delayRot = 75;
+      } else if (delayRot > 0) {
+        delayRot--;
       }
-    }
-    if (ready) {
-      moveHelicopter();
-
-    }
+      heliBlade.bladeSpin(bladeRot);
+  }
+  public void changeState(HeliState state)
+  {
+    this.state = state;
   }
   @Override
   public void update() {
-    changeState();
+      moveHelicopter();
+  }
+  @Override
+  public void toggleIgnition() {
+    if ((Math.floor(heliSpeed) <= 0.1 &&
+        Math.floor(heliSpeed) >= -0.1))
+    {
+      state.toggleIgnition();
+    }
+  }
+
+  @Override
+  public int spinBlade(int spinSpeed) {
+    return state.spinBlade(spinSpeed);
+  }
+
+  @Override
+  public int getState() {
+    return this.state.getState();
   }
 }
 class HeloBody extends GameObject
 {
   private Image heloBody;
   private ImageView imgView;
-  public HeloBody(double centerX, double centerY)
+  public HeloBody()
   {
     heloBody = new Image("heliBody.png");
     imgView = new ImageView(heloBody);
+    translation(-30,-50);
     scale(0.3,0.3);
-    translation(imgView.getBoundsInParent().getWidth() -
-            (imgView.getBoundsInParent().getWidth()+centerX/6),
-        imgView.getBoundsInParent().getHeight() -
-            (imgView.getBoundsInParent().getHeight()+centerY/2));
+    System.out.println(imgView.getBoundsInParent());
     add(imgView);
   }
 }
+
 class HeloBlade extends GameObject
 {
-  private Line heliBlade;
-  private Circle heliPoint;
-  private double speedRotation;
-  public HeloBlade(double width, double height)
+  private Rectangle blade;
+  private int bladeRot;
+  public HeloBlade()
   {
-    speedRotation = 0.5;
-    heliPoint = new Circle(3, Color.WHITE);
-    heliBlade = new Line(-(width/2), -(height/2), width/2, height/2);
-    heliBlade.setStrokeWidth(5);
-    translation(0, 10);
-    add(heliBlade);
-    add(heliPoint);
-  }
-  public void moveBlade()
-  {
-    AnimationTimer loop = new AnimationTimer() {
-      int iteration = 0;
-      @Override
-      public void handle(long now) {
+    bladeRot = 0;
+    blade = new Rectangle(5, 125);
+    blade.setFill(Color.GRAY);
+    translation(0, -blade.getHeight()/2);
 
-        if (iteration++ % 10 == 0) {
-          rotation(getMyRotation() - speedRotation);
-        }
-      }
-    };
+    add(blade);
     loop.start();
   }
+  public void bladeSpin(int bladeRot)
+  {
+    this.bladeRot = bladeRot;
+  }
+  AnimationTimer loop = new AnimationTimer() {
+    @Override
+    public void handle(long now) {
+      rotation(getMyRotation()+bladeRot);
+      getTransforms().clear();
+      getTransforms().addAll(myRotation, myTranslation);
+    }
+  };
 }
 public class GameApp extends Application {
   Game game;
