@@ -31,6 +31,7 @@ interface Updatable
 }
 class Game extends Pane
 {
+  final static int MAX_ROTATE_BLADE_SPEED = 7;
   final static double WIND_SPEED = 1;
   final static double GAME_WIDTH = 400;
   final static double GAME_HEIGHT = 800;
@@ -528,10 +529,9 @@ class HeliStateStarting implements HeliState
   @Override
   public int spinBlade(int spinSpeed){
     spinSpeed += 1;
-    System.out.println(spinSpeed);
-    if (spinSpeed == 3) {
-      heli.changeState(new HeliStateReady(heli));
+    if (spinSpeed >= 5) {
       System.out.println("HELI Starting TO READY");
+      heli.changeState(new HeliStateReady(heli));
     }
     return spinSpeed;
   }
@@ -555,8 +555,8 @@ class HeliStateReady implements HeliState
   }
   @Override
   public int spinBlade(int spinSpeed){
-    spinSpeed = 3;
-    System.out.println(spinSpeed);
+    if (spinSpeed < Game.MAX_ROTATE_BLADE_SPEED)
+      spinSpeed++;
     return spinSpeed;
   }
   @Override
@@ -602,8 +602,7 @@ class Helicopter extends GameObject implements HeliState
   private HeloBody heliBody;
   private HeloBlade heliBlade;
   protected int bladeRot;
-  protected int delayRot = 75;
-  private boolean ignition;
+  protected int delayRot = 50;
 
   public Helicopter()
   {
@@ -615,8 +614,6 @@ class Helicopter extends GameObject implements HeliState
     heliSpeed = 0;
     heliHeading = 0;
     bladeRot = 0;
-
-    ignition = false;
 
     heliBody = new HeloBody();
 
@@ -633,8 +630,6 @@ class Helicopter extends GameObject implements HeliState
     add(heliBody);
     add(heliBlade);
     this.state = new HeliStateOff(this);
-    getTransforms().clear();
-    getTransforms().addAll(myTranslation, myRotation, myScale);
   }
   private void makeHeliBound()
   {
@@ -688,7 +683,7 @@ class Helicopter extends GameObject implements HeliState
   }
   private void moveHelicopter()
   {
-      fuelText.setText("F:" + (int) fuel);
+    if (getState() == 2) {
       if (heliSpeed >= maxHeliSpeed)
         heliSpeed = 10;
       if (heliSpeed <= minHeliSpeed)
@@ -698,20 +693,17 @@ class Helicopter extends GameObject implements HeliState
           myTranslation.getY() + getVy());
 
       rotation(-heliHeading);
-      if (fuel >= 0) {
-        fuel = fuel - (1 + (heliSpeed / maxHeliSpeed) +
-            Math.abs(heliSpeed / minHeliSpeed));
-      } else {
-        fuel = 0;
-      }
-
-      if (delayRot == 0) {
-        bladeRot = spinBlade(bladeRot);
-        delayRot = 75;
-      } else if (delayRot > 0) {
-        delayRot--;
-      }
-      heliBlade.bladeSpin(bladeRot);
+    }
+  }
+  public void decreaseFuel()
+  {
+    fuelText.setText("F:" + (int) fuel);
+    if (fuel >= 0) {
+      fuel = fuel - (1 + (heliSpeed / maxHeliSpeed) +
+          Math.abs(heliSpeed / minHeliSpeed));
+    } else {
+      fuel = 0;
+    }
   }
   public void changeState(HeliState state)
   {
@@ -719,17 +711,25 @@ class Helicopter extends GameObject implements HeliState
   }
   @Override
   public void update() {
-      moveHelicopter();
+    moveHelicopter();
+    if (getState() != 0)
+      decreaseFuel();
+    if (delayRot == 0) {
+      bladeRot = spinBlade(bladeRot);
+      delayRot = 50;
+    } else if (delayRot > 0) {
+      delayRot--;
+    }
+    heliBlade.bladeSpin(bladeRot);
   }
   @Override
   public void toggleIgnition() {
-    if ((Math.floor(heliSpeed) <= 0.1 &&
-        Math.floor(heliSpeed) >= -0.1))
+    if (Math.floor(heliSpeed) <= 0.1 &&
+        Math.floor(heliSpeed) >= -0.1)
     {
       state.toggleIgnition();
     }
   }
-
   @Override
   public int spinBlade(int spinSpeed) {
     return state.spinBlade(spinSpeed);
@@ -757,14 +757,14 @@ class HeloBody extends GameObject
 
 class HeloBlade extends GameObject
 {
-  private Rectangle blade;
+  private Line blade;
   private int bladeRot;
   public HeloBlade()
   {
     bladeRot = 0;
-    blade = new Rectangle(5, 125);
-    blade.setFill(Color.GRAY);
-    translation(0, -blade.getHeight()/2);
+    blade = new Line(-50, -50,50,50);
+    blade.setStrokeWidth(5);
+    blade.setStroke(Color.GRAY);
 
     add(blade);
     loop.start();
