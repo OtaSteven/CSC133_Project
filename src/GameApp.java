@@ -88,22 +88,20 @@ class Game extends Pane
       alert.show();
     }
     if (helicopter.isHelicopterTurnOn()) {
-      for (int i = 0; i < pondMaker.getListOfPond().size(); i++) {
-        if (pondMaker.isListOfPondFull(i)) {
-          GameTimer.stop();
-          msg.setText("You have won! Play again?");
-          alert = new Alert(Alert.AlertType.CONFIRMATION, msg.getText(),
-              ButtonType.YES, ButtonType.NO);
-          alert.setOnHidden(event -> {
-            if (alert.getResult() == ButtonType.YES) {
-              init();
-              run();
-            } else {
-              Platform.exit();
-            }
-          });
-          alert.show();
-        }
+      if (averagePondCap() >= 80) {
+        GameTimer.stop();
+        msg.setText("You have won! Play again?");
+        alert = new Alert(Alert.AlertType.CONFIRMATION, msg.getText(),
+            ButtonType.YES, ButtonType.NO);
+        alert.setOnHidden(event -> {
+          if (alert.getResult() == ButtonType.YES) {
+            init();
+            run();
+          } else {
+            Platform.exit();
+          }
+        });
+        alert.show();
       }
     }
   }
@@ -130,10 +128,14 @@ class Game extends Pane
           ((Cloud)cloudMaker.getListOfCloud().get(i)).getCloudBound()).
           getBoundsInParent().isEmpty())
       {
-        //System.out.println("HITTING CLOUD " + i);
         cloudMaker.increaseOnCloud(i);
       }
     }
+  }
+  public double averagePondCap()
+  {
+    System.out.println(pondMaker.getTotalPondCap()/pondMaker.getListOfPond().size());
+      return pondMaker.getTotalPondCap()/pondMaker.getListOfPond().size();
   }
   public void startHelicopter()
   {
@@ -349,6 +351,10 @@ class Pond extends GameObject
   {
     return pondCapacity >= 100;
   }
+  public int pondCap()
+  {
+    return pondCapacity;
+  }
   public void expandPond()
   {
     pond.setRadius(pond.getRadius() + expansionIncrement);
@@ -398,6 +404,15 @@ class PondMaker extends GameObject
         }
       }
     }
+  }
+  public int getTotalPondCap()
+  {
+    int totalPondCap = 0;
+    for (int i = 0; i < pondList.size(); i++)
+    {
+      totalPondCap += pondList.get(i).pondCap();
+    }
+    return totalPondCap;
   }
   public void fillPonds(int n, Point2D cloudPos)
   {
