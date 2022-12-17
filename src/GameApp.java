@@ -322,8 +322,7 @@ class Pond extends GameObject
     pondText.setTranslateY(pond.getCenterY()+10);
 
     translation(rand.nextInt((int)(Game.GAME_WIDTH+pond.getRadius())),
-        rand.nextInt((int)(Game.GAME_HEIGHT - (pond.getRadius()*2))) +
-            heightOffset);
+        rand.nextInt((int)(Game.GAME_HEIGHT - heightOffset)) + heightOffset);
 
     pondCollidingWall();
 
@@ -446,66 +445,77 @@ class PondMaker extends GameObject
     }
   }
 }
-interface CloudManager
+class TransientGameObject extends GameObject
 {
-  void moveCloud();
-}
-class CloudAlive implements CloudManager
-{
-  private final Cloud currCloud;
-  public CloudAlive(Cloud cloud)
+  public TransientState objectState;
+  public void changeState(TransientState state)
   {
-    this.currCloud = cloud;
+    this.objectState = state;
   }
-  @Override
-  public void moveCloud() {
-    currCloud.moveCloud();
-    if (currCloud.myTranslation.getX() >= 0)
+  public boolean isObjectDead()
+  {
+    return objectState instanceof Dead;
+  }
+  interface TransientState
+  {
+    void movingObject();
+  }
+  class Created implements TransientState
+  {
+    private GameObject object;
+    public Created(GameObject object)
     {
-      currCloud.changeState(new CloudInView(currCloud));
+      System.out.println("CREATED");
+      this.object = object;
+    }
+    @Override
+    public void movingObject() {
+      if (object.myTranslation.getX() > 0) {
+        changeState(new InView(object));
+      }
+    }
+  }
+  class InView implements TransientState
+  {
+    private GameObject object;
+    public InView(GameObject object)
+    {
+      System.out.println("IN VIEW");
+      this.object = object;
+    }
+    @Override
+    public void movingObject() {
+      if (object.myTranslation.getX() >= Game.GAME_WIDTH +
+          object.getBoundsInLocal().getWidth()/2) {
+        changeState(new Dead(object));
+      }
+    }
+  }
+  class Dead implements TransientState
+  {
+    private GameObject object;
+    public Dead(GameObject object)
+    {
+      this.object = object;
+    }
+    @Override
+    public void movingObject() {
+      // Object is dead, will be recreated in their respective class after being
+      // removed
     }
   }
 }
-class CloudInView implements CloudManager
-{
-  private final Cloud currCloud;
-  public CloudInView(Cloud cloud)
-  {
-    this.currCloud = cloud;
-  }
-  @Override
-  public void moveCloud() {
-    currCloud.moveCloud();
-    if (currCloud.myTranslation.getX() >= Game.GAME_WIDTH +
-        currCloud.getBoundsInParent().getWidth())
-    {
-      currCloud.changeState(new CloudDead(currCloud));
-    }
-  }
-}
-class CloudDead implements CloudManager
-{
-  public CloudDead(Cloud cloud)
-  {
-    // Cloud will be removed from the cloudList in this state
-  }
-  @Override
-  public void moveCloud() {
-    // Cloud will be removed from the cloudList
-  }
-}
-class Cloud extends GameObject
+class Cloud extends TransientGameObject
 {
   private Circle cloud;
   private int cloudCapacity;
   private GameText cloudText;
   private int saturationColor = 255;
-  private CloudManager cloudState;
-
   public Cloud()
   {
     createCloud();
     makeCloudBound();
+    objectState = new Created(this);
   }
   private void createCloud()
   {
@@ -519,11 +529,10 @@ class Cloud extends GameObject
     cloudText.setColor(Color.BLUE);
 
     translation(-rand.nextInt((int)cloud.getRadius())-10,
-        rand.nextInt((int)(Game.GAME_HEIGHT)));
+        rand.nextInt((int)(Game.GAME_HEIGHT-cloud.getRadius())));
 
     add(cloud);
     add(cloudText);
-    cloudState = new CloudAlive(this);
   }
   private void makeCloudBound()
   {
@@ -563,19 +572,12 @@ class Cloud extends GameObject
   protected void moveCloud()
   {
     myTranslation.setX(myTranslation.getX() + Game.WIND_SPEED);
-  }
-  public void changeState(CloudManager state)
-  {
-    this.cloudState = state;
-  }
-  public boolean isCloudDead()
-  {
-    return cloudState instanceof CloudDead;
+    objectState.movingObject();
   }
   @Override
   public void update() {
     cloudText.setText(cloudCapacity + "%");
-    cloudState.moveCloud();
+    moveCloud();
   }
 }
 class CloudMaker extends GameObject
@@ -616,7 +618,7 @@ class CloudMaker extends GameObject
     for (int i = 0; i < cloudList.size(); i++)
     {
       cloudList.get(i).update();
-      if (cloudList.get(i).isCloudDead())
+      if (cloudList.get(i).isObjectDead())
       {
         if (cloudList.size() <= 2) {
           for (int j = 0; j < rand.nextInt(3) + 1; j++)
@@ -633,7 +635,99 @@ class CloudMaker extends GameObject
           add(newCloud);
         }
         cloudList.remove(i);
+        getChildren().remove(i);
       }
+    }
+  }
+}
+class Blimp extends TransientGameObject
+{
+  private ImageView imgView;
+  private Random rand = new Random();
+  private GameText refuelText;
+  private int refuelCapacity = 0;
+  public Blimp()
+  {
+    init();
+  }
+  private void init()
+  {
+    createBlimp();
+    makeBlimpBound();
+    objectState = new Created(this);
+  }
+  private void createBlimp()
+  {
+    int blimpOffset = 200;
+    refuelCapacity = rand.nextInt(5000) + 5000;
+
+    imgView = new ImageView(new Image("blimp.png"));
+
+    refuelText = new GameText("F: " + refuelCapacity);
+    refuelText.setColor(Color.YELLOW);
+    refuelText.translation(imgView.getBoundsInParent().getWidth()/2 -
+            refuelText.getBoundsInParent().getWidth()/2,
+        imgView.getBoundsInParent().getHeight()/2);
+
+    translation(-rand.nextInt((int)imgView.getBoundsInLocal().getWidth())-20,
+        rand.nextInt((int)(Game.GAME_HEIGHT - (blimpOffset +
+            imgView.getBoundsInLocal().getHeight()))) + blimpOffset);
+
+    add(imgView);
+    add(refuelText);
+  }
+  private void makeBlimpBound()
+  {
+    createBoundingBox(imgView.getBoundsInParent().getMinX(),
+        imgView.getBoundsInParent().getMinY(),
+        imgView.getBoundsInParent().getWidth(),
+        imgView.getBoundsInParent().getHeight());
+  }
+  protected void moveBlimp()
+  {
+    myTranslation.setX(myTranslation.getX() + Game.WIND_SPEED);
+    objectState.movingObject();
+  }
+  public void decreaseRefuel()
+  {
+    if (refuelCapacity > 0)
+      refuelCapacity--;
+  }
+  @Override
+  public void update() {
+    refuelText.setText("F: " + refuelCapacity);
+    moveBlimp();
+  }
+}
+class BlimpFactory extends GameObject
+{
+  Blimp blimp;
+  public BlimpFactory()
+  {
+    blimp = new Blimp();
+    add(blimp);
+  }
+  public Rectangle getBlimpBound()
+  {
+    return blimp.bbox;
+  }
+  public void showBlimpBoundingBox()
+  {
+    blimp.showBoundingBox();
+  }
+  public void decreaseBlimpRefuel()
+  {
+    blimp.decreaseRefuel();
+  }
+  @Override
+  public void update()
+  {
+    blimp.update();
+    if (blimp.isObjectDead())
+    {
+      getChildren().remove(blimp);
+      blimp = new Blimp();
+      add(blimp);
     }
   }
 }
@@ -952,153 +1046,6 @@ class HeloBlade extends GameObject
       getTransforms().addAll(myRotation, myTranslation);
     }
   };
-}
-class Blimp extends GameObject
-{
-  private ImageView imgView;
-  private Random rand = new Random();
-  private BlimpManager blimpState;
-  private GameText refuelText;
-  private int refuelCapacity = 0;
-  public Blimp()
-  {
-    init();
-  }
-  private void init()
-  {
-    createBlimp();
-    makeBlimpBound();
-    blimpState = new BlimpAlive(this);
-  }
-  private void createBlimp()
-  {
-    int blimpOffset = 200;
-    refuelCapacity = rand.nextInt(5000) + 5000;
-
-    imgView = new ImageView(new Image("blimp.png"));
-
-    refuelText = new GameText("F: " + refuelCapacity);
-    refuelText.setColor(Color.YELLOW);
-    refuelText.translation(imgView.getBoundsInParent().getWidth()/2 -
-            refuelText.getBoundsInParent().getWidth()/2,
-        imgView.getBoundsInParent().getHeight()/2);
-
-    translation(-rand.nextInt((int)imgView.getBoundsInParent().getWidth())-10
-        , rand.nextInt((int)(Game.GAME_HEIGHT/2)) + blimpOffset);
-
-    add(imgView);
-    add(refuelText);
-  }
-  private void makeBlimpBound()
-  {
-    createBoundingBox(imgView.getBoundsInParent().getMinX(),
-        imgView.getBoundsInParent().getMinY(),
-        imgView.getBoundsInParent().getWidth(),
-        imgView.getBoundsInParent().getHeight());
-  }
-  protected void moveBlimp()
-  {
-    myTranslation.setX(myTranslation.getX() + Game.WIND_SPEED);
-  }
-  public void decreaseRefuel()
-  {
-    if (refuelCapacity > 0)
-      refuelCapacity--;
-  }
-  public void changeState(BlimpManager state)
-  {
-    this.blimpState = state;
-  }
-  public boolean isBlimpDead()
-  {
-    return blimpState instanceof BlimpDead;
-  }
-  @Override
-  public void update() {
-    refuelText.setText("F: " + refuelCapacity);
-    blimpState.moveBlimp();
-  }
-}
-class BlimpFactory extends GameObject
-{
-  Blimp blimp;
-  public BlimpFactory()
-  {
-    blimp = new Blimp();
-    add(blimp);
-  }
-  public Rectangle getBlimpBound()
-  {
-    return blimp.bbox;
-  }
-  public void showBlimpBoundingBox()
-  {
-    blimp.showBoundingBox();
-  }
-  public void decreaseBlimpRefuel()
-  {
-    blimp.decreaseRefuel();
-  }
-  @Override
-  public void update()
-  {
-    blimp.update();
-    if (blimp.isBlimpDead())
-    {
-      getChildren().remove(blimp);
-      blimp = new Blimp();
-      add(blimp);
-    }
-  }
-}
-interface BlimpManager
-{
-  void moveBlimp();
-}
-class BlimpAlive implements BlimpManager
-{
-  Blimp blimp;
-  public BlimpAlive(Blimp blimp)
-  {
-    this.blimp = blimp;
-  }
-  @Override
-  public void moveBlimp() {
-    blimp.moveBlimp();
-    if (blimp.myTranslation.getX() >= 0)
-    {
-      blimp.changeState(new BlimpInView(blimp));
-    }
-  }
-}
-class BlimpInView implements BlimpManager
-{
-  Blimp blimp;
-  public BlimpInView(Blimp blimp)
-  {
-    this.blimp = blimp;
-  }
-  @Override
-  public void moveBlimp() {
-    blimp.moveBlimp();
-    if (blimp.myTranslation.getX() >= Game.GAME_WIDTH +
-        blimp.getBoundsInParent().getWidth()/2)
-    {
-      blimp.changeState(new BlimpDead(blimp));
-    }
-  }
-}
-class BlimpDead implements BlimpManager
-{
-  Blimp blimp;
-  public BlimpDead(Blimp blimp)
-  {
-    this.blimp = blimp;
-  }
-  @Override
-  public void moveBlimp() {
-    //This blimp is dead, remaking new blimp upon this state
-  }
 }
 public class GameApp extends Application {
   Game game;
