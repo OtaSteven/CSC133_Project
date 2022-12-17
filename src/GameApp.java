@@ -36,14 +36,13 @@ class Game extends Pane
   final static double GAME_WIDTH = 800;
   final static double GAME_HEIGHT = 800;
   final static double HELI_SPAWN_AREA = 250;
-  private final Random rand = new Random();
   private HeliPad heliPad;
   private Helicopter helicopter;
   private Text msg;
   private Alert alert;
   private CloudMaker cloudMaker;
   private PondMaker pondMaker;
-  private Blimp blimp;
+  private BlimpFactory blimp;
   public Game()
   {
     setScaleY(-1);
@@ -52,10 +51,11 @@ class Game extends Pane
   public void init()
   {
     getChildren().clear();
+
     msg = new Text();
     BackgroundImg bgImg = new BackgroundImg();
     pondMaker = new PondMaker();
-    blimp = new Blimp();
+    blimp = new BlimpFactory();
     cloudMaker = new CloudMaker();
     heliPad = new HeliPad();
     helicopter = new Helicopter(heliPad.myTranslation.getX(),
@@ -63,8 +63,8 @@ class Game extends Pane
 
     getChildren().add(bgImg);
     getChildren().add(pondMaker);
-    getChildren().add(cloudMaker);
     getChildren().add(blimp);
+    getChildren().add(cloudMaker);
     getChildren().add(heliPad);
     getChildren().add(helicopter);
   }
@@ -150,7 +150,7 @@ class Game extends Pane
     for (int i = 0; i < pondMaker.getPondListSize(); i++)
       pondMaker.getPondInList(i).showBoundingBox();
 
-    blimp.showBoundingBox();
+    blimp.showBlimpBoundingBox();
     heliPad.showBoundingBox();
     helicopter.showBoundingBox();
   }
@@ -163,13 +163,15 @@ class Game extends Pane
   {
     AnimationTimer loop = new AnimationTimer() {
       private int iteration = 0;
+      private int blimpContactTimer = 100;
       @Override
       public void handle(long now) {
         winLossCondition(this);
         helicopter.update();
         blimp.update();
 
-        if (iteration++ % 30 == 0) {
+        if (iteration++ % 30 == 0)
+        {
           loseCloudSaturation();
           for (int i = 0; i < cloudMaker.getCloudListSize(); i++)
           {
@@ -180,6 +182,22 @@ class Game extends Pane
               }
             }
           }
+        }
+        if (!Shape.intersect(helicopter.getHeliBound(), blimp.getBlimpBound())
+            .getBoundsInParent().isEmpty())
+        {
+          if (blimpContactTimer == 0) {
+            blimp.decreaseBlimpRefuel();
+            helicopter.increaseFuel();
+          }
+          else
+          {
+            blimpContactTimer--;
+          }
+        }
+        else
+        {
+          blimpContactTimer = 100;
         }
         cloudMaker.update();
         pondMaker.update();
@@ -282,11 +300,11 @@ class Pond extends GameObject
   private Circle pond;
   private Random rand;
   private GameText pondText;
-  private int pondCapacity, heightOffset;
+  private int pondCapacity;
+  private final int heightOffset = 200;
   private double expansionIncrement = 0.1;
   public Pond()
   {
-    heightOffset = 100;
     createPond();
     makePondBound();
   }
@@ -304,8 +322,8 @@ class Pond extends GameObject
     pondText.setTranslateY(pond.getCenterY()+10);
 
     translation(rand.nextInt((int)(Game.GAME_WIDTH+pond.getRadius())),
-        rand.nextInt((int)(Game.GAME_HEIGHT - heightOffset -
-            (pond.getRadius()*2))) + heightOffset);
+        rand.nextInt((int)(Game.GAME_HEIGHT - (pond.getRadius()*2))) +
+            heightOffset);
 
     pondCollidingWall();
 
@@ -330,9 +348,7 @@ class Pond extends GameObject
         myTranslation.getY()+(pond.getRadius()*2) >= Game.GAME_HEIGHT ||
         myTranslation.getY()+(pond.getRadius()*2) <= Game.HELI_SPAWN_AREA)
     {
-      System.out.println("REPOSITION POND");
       resetPond();
-      pondCollidingWall();
     }
   }
   public void fillingPond(Point2D cloudPos)
@@ -367,8 +383,8 @@ class Pond extends GameObject
     pondText.setTranslateY(pond.getCenterY()+10);
 
     translation(rand.nextInt((int)(Game.GAME_WIDTH+pond.getRadius())),
-        rand.nextInt((int)(Game.GAME_HEIGHT - heightOffset -
-            (pond.getRadius()*2))) + heightOffset);
+        rand.nextInt((int)(Game.GAME_HEIGHT - (pond.getRadius()*2))) +
+            heightOffset);
 
     pondCollidingWall();
   }
@@ -481,23 +497,20 @@ class CloudDead implements CloudManager
 class Cloud extends GameObject
 {
   private Circle cloud;
-  private int cloudCapacity, heightOffset;
+  private int cloudCapacity;
   private GameText cloudText;
   private int saturationColor = 255;
   private CloudManager cloudState;
 
   public Cloud()
   {
-    cloudCapacity = 0;
     createCloud();
     makeCloudBound();
-    cloudState = new CloudAlive(this);
   }
   private void createCloud()
   {
+    cloudCapacity = 0;
     Random rand = new Random();
-    heightOffset = 200;
-
     cloud = new Circle(50, Color.rgb(saturationColor, saturationColor,
         saturationColor));
     cloudText = new GameText("0%");
@@ -505,12 +518,12 @@ class Cloud extends GameObject
     cloudText.setTranslateY(cloud.getCenterY()+10);
     cloudText.setColor(Color.BLUE);
 
-    translation(-rand.nextInt((int)cloud.getRadius()*2)-10,
-        rand.nextInt((int)(Game.GAME_HEIGHT - heightOffset -
-            (cloud.getRadius()*2))) + heightOffset);
+    translation(-rand.nextInt((int)cloud.getRadius())-10,
+        rand.nextInt((int)(Game.GAME_HEIGHT)));
 
     add(cloud);
     add(cloudText);
+    cloudState = new CloudAlive(this);
   }
   private void makeCloudBound()
   {
@@ -568,13 +581,14 @@ class Cloud extends GameObject
 class CloudMaker extends GameObject
 {
   private LinkedList<Cloud> cloudList = new LinkedList<>();
-  Random rand = new Random();
+  private Random rand = new Random();
   public CloudMaker()
   {
-    for (int i = 0; i < rand.nextInt(5) + 1; i++) {
-      cloudList.add(new Cloud());
+    for (int i = 0; i < rand.nextInt(3)+2; i++) {
+      Cloud newCloud = new Cloud();
+      cloudList.add(newCloud);
+      add(newCloud);
     }
-    getChildren().addAll(cloudList);
   }
   public int getCloudListSize()
   {
@@ -602,23 +616,23 @@ class CloudMaker extends GameObject
     for (int i = 0; i < cloudList.size(); i++)
     {
       cloudList.get(i).update();
-      if (getCloudInList(i).isCloudDead())
+      if (cloudList.get(i).isCloudDead())
       {
-        cloudList.remove(i);
         if (cloudList.size() <= 2) {
-          for (int j = 0; j < rand.nextInt(5) + 1; j++)
+          for (int j = 0; j < rand.nextInt(3) + 1; j++)
           {
-            cloudList.add(new Cloud());
-            getChildren().add(cloudList.get(cloudList.size()-1));
+            Cloud newCloud = new Cloud();
+            cloudList.add(newCloud);
+            add(newCloud);
           }
         }
-        else {
-          if (rand.nextInt(2) == 1)
-          {
-            cloudList.add(new Cloud());
-            getChildren().add(cloudList.get(cloudList.size()-1));
-          }
+        if (rand.nextInt(2) == 1)
+        {
+          Cloud newCloud = new Cloud();
+          cloudList.add(newCloud);
+          add(newCloud);
         }
+        cloudList.remove(i);
       }
     }
   }
@@ -853,6 +867,10 @@ class Helicopter extends GameObject implements HeliState
       rotation(-heliHeading);
     }
   }
+  public void increaseFuel()
+  {
+    fuel+=2;
+  }
   private void decreaseFuel()
   {
     fuelText.setText("F:" + (int) fuel);
@@ -942,7 +960,6 @@ class Blimp extends GameObject
   private BlimpManager blimpState;
   private GameText refuelText;
   private int refuelCapacity = 0;
-  private final int blimpOffset = 200;
   public Blimp()
   {
     init();
@@ -955,6 +972,7 @@ class Blimp extends GameObject
   }
   private void createBlimp()
   {
+    int blimpOffset = 200;
     refuelCapacity = rand.nextInt(5000) + 5000;
 
     imgView = new ImageView(new Image("blimp.png"));
@@ -982,18 +1000,54 @@ class Blimp extends GameObject
   {
     myTranslation.setX(myTranslation.getX() + Game.WIND_SPEED);
   }
+  public void decreaseRefuel()
+  {
+    if (refuelCapacity > 0)
+      refuelCapacity--;
+  }
   public void changeState(BlimpManager state)
   {
     this.blimpState = state;
+  }
+  public boolean isBlimpDead()
+  {
+    return blimpState instanceof BlimpDead;
   }
   @Override
   public void update() {
     refuelText.setText("F: " + refuelCapacity);
     blimpState.moveBlimp();
-    if (blimpState instanceof BlimpDead)
+  }
+}
+class BlimpFactory extends GameObject
+{
+  Blimp blimp;
+  public BlimpFactory()
+  {
+    blimp = new Blimp();
+    add(blimp);
+  }
+  public Rectangle getBlimpBound()
+  {
+    return blimp.bbox;
+  }
+  public void showBlimpBoundingBox()
+  {
+    blimp.showBoundingBox();
+  }
+  public void decreaseBlimpRefuel()
+  {
+    blimp.decreaseRefuel();
+  }
+  @Override
+  public void update()
+  {
+    blimp.update();
+    if (blimp.isBlimpDead())
     {
-      System.out.println("NEW BLIMP MADE");
-      init();
+      getChildren().remove(blimp);
+      blimp = new Blimp();
+      add(blimp);
     }
   }
 }
@@ -1039,12 +1093,11 @@ class BlimpDead implements BlimpManager
   Blimp blimp;
   public BlimpDead(Blimp blimp)
   {
-    System.out.println("BLIMP DEAD");
     this.blimp = blimp;
   }
   @Override
   public void moveBlimp() {
-    //System.out.println("NEW BLIMP");
+    //This blimp is dead, remaking new blimp upon this state
   }
 }
 public class GameApp extends Application {
