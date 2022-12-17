@@ -55,16 +55,16 @@ class Game extends Pane
     msg = new Text();
     BackgroundImg bgImg = new BackgroundImg();
     pondMaker = new PondMaker();
-    blimp = new BlimpFactory();
     cloudMaker = new CloudMaker();
+    blimp = new BlimpFactory();
     heliPad = new HeliPad();
     helicopter = new Helicopter(heliPad.myTranslation.getX(),
         heliPad.myTranslation.getY());
 
     getChildren().add(bgImg);
     getChildren().add(pondMaker);
-    getChildren().add(blimp);
     getChildren().add(cloudMaker);
+    getChildren().add(blimp);
     getChildren().add(heliPad);
     getChildren().add(helicopter);
   }
