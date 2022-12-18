@@ -160,10 +160,7 @@ class Game extends Pane
   public void turnOnBoundary()
   {
     cloudMaker.showCloudsBoundingBox();
-
-    for (int i = 0; i < pondMaker.getPondListSize(); i++)
-      pondMaker.getPondInList(i).showBoundingBox();
-
+    pondMaker.showPondsBoundingBox();
     blimp.showBlimpBoundingBox();
     heliPad.showBoundingBox();
     helicopter.showBoundingBox();
@@ -439,9 +436,12 @@ class PondMaker extends GameObject
   {
     return pondList.size();
   }
-  public Pond getPondInList(int n)
+  public void showPondsBoundingBox()
   {
-    return pondList.get(n);
+    for (int i = 0; i < pondList.size(); i++)
+    {
+      pondList.get(i).showBoundingBox();
+    }
   }
   public int getTotalPondCap()
   {
