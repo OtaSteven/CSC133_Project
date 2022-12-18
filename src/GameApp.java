@@ -1,6 +1,7 @@
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.collections.ObservableList;
 import javafx.geometry.Point2D;
 import javafx.scene.Group;
 import javafx.scene.Node;
@@ -88,7 +89,8 @@ class Game extends Pane
     if (helicopter.isHelicopterTurnOn()) {
       if (averagePondCap() >= 80) {
         GameTimer.stop();
-        msg.setText("You have won! Play again?");
+        msg.setText("You have won! Your score is: " + (int)(helicopter.getFuel()
+            * ((double)pondMaker.getTotalPondCap()/100)) + "\nPlay again?");
         alert = new Alert(Alert.AlertType.CONFIRMATION, msg.getText(),
             ButtonType.YES, ButtonType.NO);
         alert.setOnHidden(event -> {
@@ -163,6 +165,7 @@ class Game extends Pane
   {
     AnimationTimer loop = new AnimationTimer() {
       private int iteration = 0;
+      private int fuelIteration = 0;
       private int blimpContactTimer = 100;
       @Override
       public void handle(long now) {
@@ -184,20 +187,11 @@ class Game extends Pane
           }
         }
         if (!Shape.intersect(helicopter.getHeliBound(), blimp.getBlimpBound())
-            .getBoundsInParent().isEmpty())
-        {
-          if (blimpContactTimer == 0) {
+            .getBoundsInParent().isEmpty()) {
+          if (fuelIteration++ % 50 == 0) {
             blimp.decreaseBlimpRefuel();
             helicopter.increaseFuel();
           }
-          else
-          {
-            blimpContactTimer--;
-          }
-        }
-        else
-        {
-          blimpContactTimer = 100;
         }
         cloudMaker.update();
         pondMaker.update();
@@ -465,7 +459,6 @@ class TransientGameObject extends GameObject
     private GameObject object;
     public Created(GameObject object)
     {
-      System.out.println("CREATED");
       this.object = object;
     }
     @Override
@@ -480,7 +473,6 @@ class TransientGameObject extends GameObject
     private GameObject object;
     public InView(GameObject object)
     {
-      System.out.println("IN VIEW");
       this.object = object;
     }
     @Override
@@ -505,12 +497,47 @@ class TransientGameObject extends GameObject
     }
   }
 }
-class Cloud extends TransientGameObject
+interface Observer
+{
+  void updateWind(Wind w);
+}
+interface Subject
+{
+  void attach(Observer o);
+  void detach(Observer o);
+  double windSpeed();
+}
+class Wind implements Subject
+{
+  private Random rand = new Random();
+  private LinkedList<Observer> observers = new LinkedList<>();
+  @Override
+  public void attach(Observer o) {
+    observers.add(o);
+  }
+  @Override
+  public void detach(Observer o) {
+    observers.remove(o);
+  }
+  @Override
+  public double windSpeed() {
+    return rand.nextDouble(2)+1;
+  }
+  public void outPutWindList()
+  {
+    for (int i = 0; i < observers.size(); i++)
+    {
+      System.out.println("CLOUD " + i + " wind: " + windSpeed());
+    }
+  }
+}
+class Cloud extends TransientGameObject implements Observer
 {
   private Circle cloud;
   private int cloudCapacity;
   private GameText cloudText;
   private int saturationColor = 255;
+  private double windSpeed = 0;
   public Cloud()
   {
     createCloud();
@@ -571,7 +598,7 @@ class Cloud extends TransientGameObject
   }
   protected void moveCloud()
   {
-    myTranslation.setX(myTranslation.getX() + Game.WIND_SPEED);
+    myTranslation.setX(myTranslation.getX() + windSpeed);
     objectState.movingObject();
   }
   @Override
@@ -579,18 +606,27 @@ class Cloud extends TransientGameObject
     cloudText.setText(cloudCapacity + "%");
     moveCloud();
   }
+  @Override
+  public void updateWind(Wind w)
+  {
+    windSpeed = w.windSpeed();
+  }
 }
 class CloudMaker extends GameObject
 {
   private LinkedList<Cloud> cloudList = new LinkedList<>();
   private Random rand = new Random();
+  private Wind wind = new Wind();
   public CloudMaker()
   {
     for (int i = 0; i < rand.nextInt(3)+2; i++) {
       Cloud newCloud = new Cloud();
       cloudList.add(newCloud);
+      wind.attach(newCloud);
+      newCloud.updateWind(wind);
       add(newCloud);
     }
+    wind.outPutWindList();
   }
   public int getCloudListSize()
   {
@@ -625,6 +661,8 @@ class CloudMaker extends GameObject
           {
             Cloud newCloud = new Cloud();
             cloudList.add(newCloud);
+            wind.attach(newCloud);
+            newCloud.updateWind(wind);
             add(newCloud);
           }
         }
@@ -632,10 +670,14 @@ class CloudMaker extends GameObject
         {
           Cloud newCloud = new Cloud();
           cloudList.add(newCloud);
+          wind.attach(newCloud);
+          newCloud.updateWind(wind);
           add(newCloud);
         }
+        wind.detach(cloudList.get(i));
         cloudList.remove(i);
         getChildren().remove(i);
+        wind.outPutWindList();
       }
     }
   }
@@ -974,6 +1016,10 @@ class Helicopter extends GameObject implements HeliState
     } else {
       fuel = 0;
     }
+  }
+  public double getFuel()
+  {
+    return fuel;
   }
   public void changeState(HeliState state)
   {
