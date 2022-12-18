@@ -98,7 +98,7 @@ class Game extends Pane
       });
       alert.show();
     }
-    if (helicopter.isHelicopterTurnOn()) {
+    if (!helicopter.isHelicopterTurnOn()) {
       if (averagePondCap() >= 80) {
         GameTimer.stop();
         msg.setText("You have won! Your score is: " + (int)(helicopter.getFuel()
@@ -135,12 +135,13 @@ class Game extends Pane
   }
   public void fillCloud()
   {
-    for (int i = 0; i < cloudMaker.getCloudListSize(); i++) {
-      if (!Shape.intersect(helicopter.getHeliBound(),
-          cloudMaker.getCloudBoundingBox(i)).getBoundsInParent().
-          isEmpty())
-      {
-        cloudMaker.increaseOnCloud(i);
+    if (helicopter.isHelicopterTurnOn()) {
+      for (int i = 0; i < cloudMaker.getCloudListSize(); i++) {
+        if (!Shape.intersect(helicopter.getHeliBound(),
+                cloudMaker.getCloudBoundingBox(i)).getBoundsInParent().
+            isEmpty()) {
+          cloudMaker.increaseOnCloud(i);
+        }
       }
     }
   }
@@ -1062,7 +1063,7 @@ class Helicopter extends GameObject implements HeliState
     return state.spinBlade(spinSpeed);
   }
   public boolean isHelicopterTurnOn() {
-    return state instanceof HeliStateOff;
+    return !(state instanceof HeliStateOff);
   }
   @Override
   public void update() {
