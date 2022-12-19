@@ -438,9 +438,8 @@ class PondMaker extends GameObject
   }
   public void showPondsBoundingBox()
   {
-    for (int i = 0; i < pondList.size(); i++)
-    {
-      pondList.get(i).showBoundingBox();
+    for (Pond pond : pondList) {
+      pond.showBoundingBox();
     }
   }
   public int getTotalPondCap()
